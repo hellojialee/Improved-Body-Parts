@@ -65,7 +65,7 @@ class PoseNet(nn.Module):
         self.nstack = nstack
 
     def forward(self, imgs):
-        # input tensor: imgs, shape=(N, H, W, C)
+        # input tensor: imgs, shape=(N, H, W, C). Pre-processing of input image was done in data generator
         x = imgs.permute(0, 3, 1, 2)  # Permute the dimensions of images to (N, C, H, W)
         x = self.pre(x)
         pred = []

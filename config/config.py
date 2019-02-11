@@ -4,12 +4,11 @@ import numpy as np
 
 
 class CanonicalConfig:
-    """Config used in this project"""
+    """Config used in ouf project"""
     def __init__(self):
-
-        self.width = 368
-        self.height = 368
-        self.stride = 8  # 用于计算网络输出的feature map的尺寸
+        self.width = 512
+        self.height = 512
+        self.stride = 4  # 用于计算网络输出的feature map的尺寸
 
         self.parts = ["nose", "neck", "Rsho", "Relb", "Rwri", "Lsho", "Lelb", "Lwri", "Rhip", "Rkne", "Rank",
                       "Lhip", "Lkne", "Lank", "Reye", "Leye", "Rear", "Lear"]  # , "navel"
@@ -23,11 +22,13 @@ class CanonicalConfig:
         self.rightParts = rightParts
 
         # this numbers probably copied from matlab they are 1.. based not 0.. based
-        self.limb_from = ['neck', 'neck', 'neck', 'neck', 'neck', 'nose', 'nose', 'Reye', 'Leye', 'neck', 'Rsho', 'Relb', 'neck', 'Lsho', 'Lelb',
-                          'neck', 'Rhip', 'Rkne', 'neck', 'Lhip', 'Lkne', 'Rhip',  'Rsho', 'Lsho']
+        self.limb_from = ['neck', 'neck', 'neck', 'neck', 'neck', 'nose', 'nose', 'Reye', 'Leye', 'neck', 'Rsho',
+                          'Relb', 'neck', 'Lsho', 'Lelb',
+                          'neck', 'Rhip', 'Rkne', 'neck', 'Lhip', 'Lkne', 'Rhip', 'Rsho', 'Lsho']
 
-        self.limb_to =   ['nose', 'Reye', 'Leye', 'Rear', 'Lear', 'Reye', 'Leye', 'Rear', 'Lear', 'Rsho', 'Relb', 'Rwri', 'Lsho', 'Lelb', 'Lwri',
-                          'Rhip', 'Rkne', 'Rank', 'Lhip', 'Lkne', 'Lank', 'Lhip',  'Rear', 'Lear']
+        self.limb_to = ['nose', 'Reye', 'Leye', 'Rear', 'Lear', 'Reye', 'Leye', 'Rear', 'Lear', 'Rsho', 'Relb', 'Rwri',
+                        'Lsho', 'Lelb', 'Lwri',
+                        'Rhip', 'Rkne', 'Rank', 'Lhip', 'Lkne', 'Lank', 'Lhip', 'Rear', 'Lear']
 
         self.limb_from = [self.parts_dict[n] for n in self.limb_from]
         self.limb_to = [self.parts_dict[n] for n in self.limb_to]
@@ -47,24 +48,25 @@ class CanonicalConfig:
         self.heat_start = self.paf_layers  # Notice: 此处channel安排上，paf_map在前，heat_map在后
         self.bkg_start = self.paf_layers + self.heat_layers  # 用于feature map的计数
 
-        #　self.data_shape = (self.height, self.width, 3)     # 368, 368, 3  # 为了训练网络
-        self.mask_shape = (self.height//self.stride, self.width//self.stride)  # 46, 46
-        self.parts_shape = (self.height//self.stride, self.width//self.stride, self.num_layers)  # 46, 46, 59
+        # 　self.data_shape = (self.height, self.width, 3)     # 368, 368, 3  # 为了训练网络
+        self.mask_shape = (self.height // self.stride, self.width // self.stride)  # 46, 46
+        self.parts_shape = (self.height // self.stride, self.width // self.stride, self.num_layers)  # 46, 46, 59
 
         class TransformationParams:
 
             def __init__(self):
-                self.target_dist = 0.6 # 0.6  # todo: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
-                # This mean we will fristly scale picture so that the height of the main person always will be 0.6 of picture.
-                self.scale_prob = 1  # TODO: this is actually scale unprobability, i.e. 1 = resize off, 0 = resize always, not sure if it is a bug or not
+                #  TODO: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
+                #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
+                self.target_dist = 0.6
+                self.scale_prob = 0.5  # scale probability, 0: never scale, 1: always scale
                 self.scale_min = 0.8
                 self.scale_max = 1.2
-                self.max_rotate_degree = 40.
+                self.max_rotate_degree = 40.  # todo: 看看hourglass中512设置的偏移
                 self.center_perterb_max = 40.  # shift augmentation
                 self.flip_prob = 0.5
-                self.tint_prob = 0.2  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
+                self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
                 self.sigma = 7  # 7
-                self.paf_sigma = 5   # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
+                self.paf_sigma = 5  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
 
                 # TODO: the value of sigma is important, there should be an equal contribution between foreground
                 # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the
@@ -72,6 +74,7 @@ class CanonicalConfig:
                 self.paf_thre = 1 * 8  # TODO: it is original 1.0 * stride in this program
                 #  为了生成在PAF时，计算limb端点边界时使用，在最后一个feature map上
                 # 将下界往下偏移1个象素质，把上界往上偏移1个像素值
+
         self.transform_params = TransformationParams()
 
     @staticmethod  # staticmethod修饰的方法定义与普通函数是一样的, staticmethod支持类对象或者实例对方法的调用,即可使用A.f()或者a.f()
@@ -85,11 +88,14 @@ class CanonicalConfig:
 class COCOSourceConfig:
     """Original config used in COCO dataset"""
     def __init__(self, hdf5_source):
-
+        """
+        Instantiate a COCOSource Config object，
+        :param hdf5_source: the path only of hdf5 training materials generated by coco_mask_hdf5.py
+        """
         self.hdf5_source = hdf5_source
         self.parts = ['nose', 'Leye', 'Reye', 'Lear', 'Rear', 'Lsho', 'Rsho', 'Lelb',
-             'Relb', 'Lwri', 'Rwri', 'Lhip', 'Rhip', 'Lkne', 'Rkne', 'Lank',
-             'Rank']  # coco数据集中关键点类型定义的顺序
+                      'Relb', 'Lwri', 'Rwri', 'Lhip', 'Rhip', 'Lkne', 'Rkne', 'Lank',
+                      'Rank']  # coco数据集中关键点类型定义的顺序
 
         self.num_parts = len(self.parts)
 
@@ -97,7 +103,7 @@ class COCOSourceConfig:
         self.parts_dict = dict(zip(self.parts, range(self.num_parts)))
 
     def convert(self, meta, global_config):
-        """Convert COCO configuration into ours configuration of this project"""
+        """Convert COCO configuration (joint annotation) into ours configuration of this project"""
         # ----------------------------------------------
         # ---将coco config中对数据的定义改成CMU项目中的格式---
         # ----------------------------------------------
@@ -106,7 +112,7 @@ class COCOSourceConfig:
 
         assert joints.shape[1] == len(self.parts)
 
-        result = np.zeros((joints.shape[0], global_config.num_parts, 3), dtype=np.float)
+        result = np.zeros((joints.shape[0], global_config.num_parts, 3))
         # result是一个三维数组，shape[0]和人数有关，每一行即shape[1]和关节点数目有关，最后一维度长度为3,分别是x,y,v,即坐标值和可见标志位
         result[:, :, 2] = 3.
         # OURS - # 3 never marked up in this dataset, 2 - not marked up in this person, 1 - marked and visible,
@@ -121,16 +127,17 @@ class COCOSourceConfig:
                 # assert global_id != 2, "navel shouldn't be known yet"
                 result[:, global_id, :] = joints[:, coco_id, :]
 
-        if 'neck' in global_config.parts_dict:   # todo: 控制是否考虑额外增加的节点　neck
+        if 'neck' in global_config.parts_dict:  # todo: 控制是否考虑额外增加的节点　neck
             neckG = global_config.parts_dict['neck']
             # parts_dict['neck']　＝　１, parts_dict是前面定义过的字典类型，节点名称：序号
             RshoC = self.parts_dict['Rsho']
             LshoC = self.parts_dict['Lsho']
 
             # no neck in coco database, we calculate it as average of shoulders
-            # TODO: we use 0 - hidden, 1 visible, 2 absent - it is not coco values they processed by generate_hdf5
+            #  here, we use 0 - hidden, 1 visible, 2 absent to represent the visibility of keypoints
+            #  - it is not the same as coco values they processed by generate_hdf5
 
-            # -------------------------------原始coco关于visibale标签的定义－－－－－－－－－--------------－－－－－－－－－#
+            # -------------------------------原始coco关于visible标签的定义－－－－－－－－－--------------－－－－－－－－－#
             # 第三个元素是个标志位v，v为0时表示这个关键点没有标注（这种情况下x = y = v = 0），
             # v为1时表示这个关键点标注了但是不可见（被遮挡了），v为2时表示这个关键点标注了同时也可见。
             # ------------------------------------ ----------------------------　－－－－－－－－－－－－－－－－－－－－－#
@@ -142,10 +149,10 @@ class COCOSourceConfig:
             result[both_shoulders_known, neckG, 0:2] = (joints[both_shoulders_known, RshoC, 0:2] +
                                                         joints[both_shoulders_known, LshoC, 0:2]) / 2
             result[both_shoulders_known, neckG, 2] = np.minimum(joints[both_shoulders_known, RshoC, 2],
-                                                                     joints[both_shoulders_known, LshoC, 2])
+                                                                joints[both_shoulders_known, LshoC, 2])
             # 最后一位是 visible　标志位，如果两个节点中有任何一个节点不可见，则中间节点neck设为不可见
 
-        if 'navel' in global_config.parts_dict:   # todo: 控制是否考虑额外增加的节点　add navel keypoint
+        if 'navel' in global_config.parts_dict:  # todo: 控制是否考虑额外增加的节点　add navel keypoint
             navelG = global_config.parts_dict['navel']
             # parts_dict['navel']　＝ 2, parts_dict是前面定义过的字典类型，节点名称：序号
             RhipC = self.parts_dict['Rhip']
@@ -154,24 +161,25 @@ class COCOSourceConfig:
             # no navel in coco database, we calculate it as average of hipulders
             both_hipulders_known = (joints[:, LhipC, 2] < 2) & (joints[:, RhipC, 2] < 2)  # 按位运算
             # 用True和False作为索引
-            result[~both_hipulders_known, navelG, 2] = 2. # otherwise they will be 3. aka 'never marked in this dataset'
+            result[
+                ~both_hipulders_known, navelG, 2] = 2.  # otherwise they will be 3. aka 'never marked in this dataset'
             # ~both_hipulders_known bool类型按位取反
             result[both_hipulders_known, navelG, 0:2] = (joints[both_hipulders_known, RhipC, 0:2] +
-                                                        joints[both_hipulders_known, LhipC, 0:2]) / 2
+                                                         joints[both_hipulders_known, LhipC, 0:2]) / 2
             result[both_hipulders_known, navelG, 2] = np.minimum(joints[both_hipulders_known, RhipC, 2],
-                                                                     joints[both_hipulders_known, LhipC, 2])
+                                                                 joints[both_hipulders_known, LhipC, 2])
 
         meta['joints'] = result
 
         return meta
 
-    def convert_mask(self, mask, global_config, joints = None):
-
-        mask = np.repeat(mask[:,:,np.newaxis], global_config.num_layers, axis=2)   # mask复制成了57个通道
+    def repeat_mask(self, mask, global_config, joints=None):
+        # 复制mask到个数到global_config通道数，但是我们不进行通道的复制，利用broadcast，节省内存
+        mask = np.repeat(mask[:, :, np.newaxis], global_config.num_layers, axis=2)  # mask复制成了57个通道
         return mask
 
     def source(self):
-
+        # return the path
         return self.hdf5_source
 
 
@@ -182,14 +190,16 @@ Configs = {}
 Configs["Canonical"] = CanonicalConfig
 
 
-def GetConfig(config_name):
+# Configs['COCOSource'] = COCOSourceConfig
 
-    config = Configs[config_name]()
+
+def GetConfig(config_name):
+    config = Configs[config_name]()  # () will instantiate an object of Configs[config_name] class
 
     dct = config.parts[:]
-    dct = [None]*(config.num_layers-len(dct)) + dct
+    dct = [None] * (config.num_layers - len(dct)) + dct
 
-    for (i,(fr,to)) in enumerate(config.limbs_conn):
+    for (i, (fr, to)) in enumerate(config.limbs_conn):
         name = "%s->%s" % (config.parts[fr], config.parts[to])
         print(i, name)
         x = i
@@ -207,5 +217,3 @@ if __name__ == "__main__":
     # test it
     foo = GetConfig("Canonical")
     print('the number of paf_layers is: %d, and the number of het_layer is: %d' % (foo.paf_layers, foo.heat_layers))
-
-

@@ -43,13 +43,13 @@ class Heatmapper:
 
     def create_heatmaps(self, joints, mask):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
         # print(joints.shape)  # 例如(3, 18, 3)，把每个main person作为图片的中心，但是依然可能会包括其他不同的人在这个裁剪后的图像中
-        heatmaps = np.zeros(self.config.parts_shape, dtype=np.float)  # config.parts_shape: 46, 46, 57
+        heatmaps = np.zeros(self.config.parts_shape, dtype=np.float32)  # config.parts_shape: 46, 46, 57
         # 此处的heat map一共有57个channel，包含了heat map以及paf以及背景channel。并且对heat map初始化为0很重要，因为这样使得没有标注的区域是没有值的！
-        self.put_joints(heatmaps, joints)
+        self.put_joints(heatmaps, joints)  # fixme: 和put_limbs学习，也加slice减少整个heatmap的计算量
         sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)
         # python切片函数　class slice(start, stop[, step])
 
-        # Generate foreground of keypoint heat map todo: remove the background channel
+        # Generate foreground of keypoint heat map todo: add paf background
         heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # # 某个位置的背景heatmap值定义为这个坐标位置处　最大的某个类型节点高斯响应的补 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # 如果加入的是前景而不是背景，则响应是　np.amax(heatmaps[:, :, sl], axis=2)
@@ -63,7 +63,7 @@ class Heatmapper:
         # heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # show一下看看生成的背景是否正常
 
-        heatmaps *= mask  # 重要！不要忘了将生成的groundtruth 乘以　mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
+        heatmaps *= mask[:, :, np.newaxis]  # 重要！不要忘了将生成的groundtruth 乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
 
         # see: https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/124
         # Mask never touch pictures.  Mask不会叠加到image数据上
@@ -78,7 +78,7 @@ class Heatmapper:
 
         return heatmaps
 
-    def put_gaussian_maps(self, heatmaps, layer, joints):
+    def put_gaussian_maps(self, heatmaps, layer, joints):  # FIXME：只计算一定区域内而不是全图像的值来加速GT的生成，参考associate embedding
         #  change the gaussian map to laplace map to get a shapper peak of keypoint ?? the result is not good
         # actually exp(a+b) = exp(a)*exp(b), lets use it calculating 2d exponent, it could just be calculated by
 
@@ -115,7 +115,7 @@ class Heatmapper:
     def put_joints(self, heatmaps, joints):
 
         for i in range(self.config.num_parts):  # len(config.num_parts) = 18, 不包括背景keypoint
-            visible = joints[:, i, 2] < 2
+            visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered
             self.put_gaussian_maps(heatmaps, i, joints[visible, i, 0:2])  # 逐个channel地进行ground truth的生成
 
     def put_vector_maps(self, heatmaps, layer, joint_from, joint_to):
@@ -181,7 +181,6 @@ class Heatmapper:
         # TODO fixme: averaging by pafs mentioned in the paper but never worked in C++ augmentation code 我采用了平均
         heatmaps[:, :, layer][count > 0] /= count[count > 0]  # 这些都是矢量化（矩阵）操作
 
-
     def put_limbs(self, heatmaps, joints):
         """
          # 循环调用逐个channel生成ground truth的函数，最外层循环是对应某个limb的某一个channel
@@ -196,7 +195,8 @@ class Heatmapper:
             self.put_vector_maps(heatmaps, layer, joints[visible, fr, 0:2], joints[visible, to, 0:2])
 
 
-# parallel calculation distance from any number of points of arbitrary shape(X, Y), to line defined by segment (x1,y1) -> (x2, y2)
+# parallel calculation distance from any number of points of arbitrary shape(X, Y),
+# to line defined by segment (x1,y1) -> (x2, y2)
 
 def gaussian(sigma, x, u):
     double_sigma2 = 2 * sigma ** 2
@@ -212,7 +212,6 @@ def distances(X, Y, sigma, x1, y1, x2, y2):  # TODO: change the paf area to elli
     # # d = [(x2-x1)*(y1-y)-(x1-x)*(y2-y1)] / sqrt((x2-x1)**2 + (y2-y1)**2)
     """
 
-    #
     xD = (x2 - x1)
     yD = (y2 - y1)
     detaX = x1 - X

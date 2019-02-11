@@ -2,10 +2,14 @@
 <module type="PYTHON_MODULE" version="4">
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
-      <excludeFolder url="file://$MODULE_DIR$/data/dataset" />
+      <sourceFolder url="file://$MODULE_DIR$/py_rmpe_server" isTestSource="false" />
+      <excludeFolder url="file://$MODULE_DIR$/data/dataset/coco" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.6 (phoenix)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.6 (pytorch)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
+  </component>
+  <component name="PyDocumentationSettings">
+    <option name="renderExternalDocumentation" value="true" />
   </component>
   <component name="TestRunnerService">
     <option name="PROJECT_TEST_RUNNER" value="Unittests" />

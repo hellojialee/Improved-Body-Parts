@@ -14,7 +14,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 
-dataset_dir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data/dataset/coco/link2coco2017'))
+dataset_dir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data/dataset/coco/COCO2017'))
 
 tr_anno_path = os.path.join(dataset_dir, "annotations/person_keypoints_train2017.json")  # 只取keypoint的标注信息
 tr_img_dir = os.path.join(dataset_dir, "train2017")
@@ -23,20 +23,21 @@ val_anno_path = os.path.join(dataset_dir, "annotations/person_keypoints_val2017.
 val_img_dir = os.path.join(dataset_dir, "val2017")
 
 datasets = [
-    (val_anno_path, val_img_dir, "COCO_val"),  # it is important to have 'val' in validation dataset name, look for 'val' below
+    (val_anno_path, val_img_dir, "COCO_val"),  # it is important to have 'val' in validation dataset name,
+    # look for 'val' below
     (tr_anno_path, tr_img_dir, "COCO")
 ]
 
 
-tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset512.h5")
-val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset512.h5")
+tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset512_try.h5")
+val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset512_try.h5")
 
 val_size = 100  # size of validation set  设置的validation subset的大小.　剩余的val数据将选入train数据中
 image_size = 512  # 用于训练网络时，设定的训练集图片的统一尺寸　
 
 
 def make_mask(img_dir, img_id, img_anns, coco):
-    """Mask all unannotated people (including the crowd which has no keypoint annotation e)"""
+    """Mask all unannotated people (including the crowd which has no keypoint annotation)"""
     # 对于某一张图像和图像中所有人或者人群的标注做处理
     # mask miss 和　mask all的解释：
     # mask_all记录了一张图像上所有人的mask(包括单个人和一群人)，　而mask miss是为了掩盖掉那些是人，有segmentation但是没有标注keypoint
@@ -52,6 +53,10 @@ def make_mask(img_dir, img_id, img_anns, coco):
     # may be it was created for some visualisation purposes.
 
     img_path = os.path.join(img_dir, "%012d.jpg" % img_id)
+
+    if not os.path.exists(img_path):
+        raise IOError("image path dose not exist: %s" % img_path)
+
     img = cv2.imread(img_path)
     h, w, c = img.shape
     # mask:　https://github.com/michalfaber/keras_Realtime_Multi-Person_Pose_Estimation/issues/8#issuecomment-342977756
@@ -62,7 +67,7 @@ def make_mask(img_dir, img_id, img_anns, coco):
     for p in img_anns:
         seg = p["segmentation"]   # seg is just a boarder of an object, see annotation file
 
-        if p["iscrowd"] == 1:   # todo:　the handel of crowd
+        if p["iscrowd"] == 1:   # the handel of crowd
             # segmentation格式取决于这个实例是一个单个的对象（即iscrowd=0，将使用polygons格式）还是一组对象（即iscrowd=1，将使用RLE格式）
             mask_crowd = coco.annToMask(p)
 
@@ -90,7 +95,7 @@ def make_mask(img_dir, img_id, img_anns, coco):
         raise Exception("crowd segments > 1")  # 对一个区域，只能存在一个segment,不存在一个区域同时属于某两个instances的部分
 
     mask_miss = mask_miss.astype(np.uint8)
-    mask_miss *= 255  # 保存的　mask_miss　的数值在0~255之间
+    mask_miss *= 255  # 保存的　mask_miss　的数值非0即255
 
     # # ------------ 注释部分代码用来显示mask crowded instance  --------------
     # print('***************', mask_miss.min(), mask_miss.max())
@@ -163,8 +168,8 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
         # skip this person if parts number is too low or if
         # segmentation area is too small
         if pers["num_keypoints"] < 5 or pers["segment_area"] < 32 * 32:
-            # todo we don not consider the main person which is too small or has too few keypoints
-            # 用于居中图片的main person是用来训练网络的主力，所以关键点和人的大小要合理
+            #  we do not select the person, which is too small or has too few keypoints, as the main person
+            # 用于居中图片的main person是用来训练网络的主力，所以关键点和人的大小要合理，关键点少的可能离其他main person近
             continue
 
         person_center = pers["objpos"]
@@ -211,8 +216,8 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
 
         instance = template.copy()  # template is a dictionary type
 
-        instance["objpos"] = [ main_persons[p]["objpos"] ]
-        instance["joints"] = [ main_persons[p]["joint"].tolist() ]  # Return the array as a (possibly nested) list
+        instance["objpos"] = [main_persons[p]["objpos"]]
+        instance["joints"] = [main_persons[p]["joint"].tolist()]  # Return the array as a (possibly nested) list
         instance["scale_provided"] = [ main_persons[p]["scale_provided"] ]
         #  while training they scale main person to be approximately image size(368 pix in our case). But after
         #  it they do random scaling 0.6-1.1. So this is very logical network never learned libs(and PAFs) could be
@@ -242,7 +247,18 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
 
 
 def writeImage(grp, img_grp, data, img, mask_miss, count, image_id, mask_grp=None):
-
+    """
+    Write hdf5 files
+    :param grp: annotation hdf5 group
+    :param img_grp: image hdf5 group
+    :param data: annotation handled
+    :param img: image returned by mask_mask()
+    :param mask_miss: mask returned by mask_mask()
+    :param count:
+    :param image_id: image index
+    :param mask_grp: mask hdf5 group
+    :return: nothing
+    """
     serializable_meta = data
     serializable_meta['count'] = count
 
@@ -255,14 +271,15 @@ def writeImage(grp, img_grp, data, img, mask_miss, count, image_id, mask_grp=Non
     img_key = "%012d" % image_id
     if not img_key in img_grp:
 
-        if mask_grp is None:
+        if mask_grp is None:  # 为了兼容MPII没有mask的情形
             img_and_mask = np.concatenate((img, mask_miss[..., None]), axis=2)
+            # create_dataset 返回创建的hdf5对象(此处为img_ds)，并且此对象被添加到img_key(若dataset name不为None)中
             img_ds = img_grp.create_dataset(img_key, data=img_and_mask, chunks=None)
         else:
-            _, img_bin = cv2.imencode(".jpg", img)
-            _, img_mask = cv2.imencode(".png", mask_miss)
-            img_ds1 = img_grp.create_dataset(img_key, data=img_bin, chunks=None)
-            img_ds2 = mask_grp.create_dataset(img_key, data=img_mask, chunks=None)
+            # _, img_bin = cv2.imencode(".jpg", img)  # we do not need it actually, delete cv2.imencode
+            # _, img_mask = cv2.imencode(".png", mask_miss) # data= img_bin, data = img_mask
+            img_ds1 = img_grp.create_dataset(img_key, data=img, chunks=None)
+            img_ds2 = mask_grp.create_dataset(img_key, data=mask_miss, chunks=None)
 
     key = '%07d' % count
     required = {'image':img_key, 'joints': serializable_meta['joints'], 'objpos': serializable_meta['objpos'], 'scale_provided': serializable_meta['scale_provided'] }
@@ -307,7 +324,7 @@ def process():
             for data in process_image(image_rec, img_id, image_index, img_anns, dataset_type):
                 # 由process_image中的val_size控制验证集的大小
 
-                if cached_img_id!=data['image_id']:
+                if cached_img_id != data['image_id']:
                     assert img_id == data['image_id']
                     cached_img_id = data['image_id']
                     img, mask_miss = make_mask(img_dir, cached_img_id, img_anns, coco)
