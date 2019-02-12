@@ -87,9 +87,9 @@ def make_mask(img_dir, img_id, img_anns, coco):
     if flag < 1:
         mask_miss = np.logical_not(mask_miss)
     elif flag == 1:
-        # mask the few keypoint and crowded instance at the same time !
+        # mask the few keypoint and crowded persons at the same time ! mask areas are 0 !
         mask_miss = np.logical_not(np.bitwise_or(mask_miss, mask_crowd))
-
+        # mask all the persons including crowded, mask area are 1 !
         mask_all = np.bitwise_or(mask_all, mask_crowd)
     else:
         raise Exception("crowd segments > 1")  # 对一个区域，只能存在一个segment,不存在一个区域同时属于某两个instances的部分
@@ -97,15 +97,24 @@ def make_mask(img_dir, img_id, img_anns, coco):
     mask_miss = mask_miss.astype(np.uint8)
     mask_miss *= 255  # 保存的　mask_miss　的数值非0即255
 
-    # # ------------ 注释部分代码用来显示mask crowded instance  --------------
-    # print('***************', mask_miss.min(), mask_miss.max())
-    # plt.imshow(img[:,:,[2,1,0]])
-    # plt.imshow(mask_miss, alpha=.5)  # mask_all
-    # plt.show()
-    # # -------------------------------------------------------------------
+    mask_all = mask_all.astype(np.uint8)
+    mask_all *= 255  # 保存的　mask_miss　的数值非0即255
     # Mask miss is multiplied by the loss,
     # so masked areas are 0. (被mask的区域是0) I.e. second mask is real mask miss. First mask (mask_all) is just for visuals.
-    return img, mask_miss
+    mask_concate = np.concatenate((mask_miss[:, :, np.newaxis], mask_all[:, :, np.newaxis]), axis=2)
+
+    # # # # ------------ 注释部分代码用来显示mask crowded instance  --------------
+    # # # print('***************', mask_miss.min(), mask_miss.max())
+    # plt.imshow(img[:,:,[2,1,0]])
+    # plt.show()
+    # plt.imshow(np.repeat(mask_concate[:, :, 1][:,:,np.newaxis], 3, axis=2))  # mask_all
+    # plt.show()
+    # plt.imshow(np.repeat(mask_concate[:, :, 0][:,:,np.newaxis], 3, axis=2))  # mask_miss
+    # plt.show()
+    # print('show')
+    # # # -------------------------------------------------------------------
+
+    return img,  mask_concate
 
 
 def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
@@ -295,7 +304,7 @@ def process():
     tr_grp = tr_h5.create_group("dataset")
     tr_write_count = 0
     tr_grp_img = tr_h5.create_group("images")
-    tr_grp_mask = tr_h5.create_group("masks")
+    tr_grp_mask = tr_h5.create_group("masks")  # in fact, is mask_concat rather than mask_miss  NOTICE !!!
 
     val_h5 = h5py.File(val_hdf5_path, 'w')
     val_grp = val_h5.create_group("dataset")

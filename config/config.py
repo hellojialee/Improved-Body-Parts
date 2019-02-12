@@ -3,23 +3,43 @@
 import numpy as np
 
 
+class TransformationParams:
+    """ Hyper-parameters """
+    def __init__(self, stride):
+        #  TODO: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
+        #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
+        self.target_dist = 0.6
+        self.scale_prob = 0.5  # scale probability, 0: never scale, 1: always scale
+        self.scale_min = 0.8
+        self.scale_max = 1.2
+        self.max_rotate_degree = 40.  # todo: 看看hourglass中512设置的偏移
+        self.center_perterb_max = 40.  # shift augmentation
+        self.flip_prob = 0.5
+        self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
+        self.sigma = 11  # 7
+        self.gaussian_thre = 0.01  # 低于此值的gt高斯响应的区域被置零
+        self.paf_sigma = 9  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
+        # the value of sigma is important, there should be an equal contribution between foreground
+        # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the
+        # network to converge to zero.
+        self.paf_thre = 1 * stride  # equals to 1.0 * stride in this program, used to include the end-points of limbs 
+        #  为了生成在PAF时，计算limb端点边界时使用，在最后一个feature map上
+        # 将下界往下偏移1个象素质，把上界往上偏移1个像素值
+
+
 class CanonicalConfig:
     """Config used in ouf project"""
     def __init__(self):
         self.width = 512
         self.height = 512
         self.stride = 4  # 用于计算网络输出的feature map的尺寸
-
         self.parts = ["nose", "neck", "Rsho", "Relb", "Rwri", "Lsho", "Lelb", "Lwri", "Rhip", "Rkne", "Rank",
                       "Lhip", "Lkne", "Lank", "Reye", "Leye", "Rear", "Lear"]  # , "navel"
         self.num_parts = len(self.parts)
         self.parts_dict = dict(zip(self.parts, range(self.num_parts)))
         self.parts += ["background"]  # 把背景类放最后，便于处理
         self.num_parts_with_background = len(self.parts)
-
-        leftParts, rightParts = CanonicalConfig.ltr_parts(self.parts_dict)
-        self.leftParts = leftParts
-        self.rightParts = rightParts
+        self.leftParts, self.rightParts = CanonicalConfig.ltr_parts(self.parts_dict)
 
         # this numbers probably copied from matlab they are 1.. based not 0.. based
         self.limb_from = ['neck', 'neck', 'neck', 'neck', 'neck', 'nose', 'nose', 'Reye', 'Leye', 'neck', 'Rsho',
@@ -52,30 +72,7 @@ class CanonicalConfig:
         self.mask_shape = (self.height // self.stride, self.width // self.stride)  # 46, 46
         self.parts_shape = (self.height // self.stride, self.width // self.stride, self.num_layers)  # 46, 46, 59
 
-        class TransformationParams:
-
-            def __init__(self):
-                #  TODO: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
-                #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
-                self.target_dist = 0.6
-                self.scale_prob = 0.5  # scale probability, 0: never scale, 1: always scale
-                self.scale_min = 0.8
-                self.scale_max = 1.2
-                self.max_rotate_degree = 40.  # todo: 看看hourglass中512设置的偏移
-                self.center_perterb_max = 40.  # shift augmentation
-                self.flip_prob = 0.5
-                self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
-                self.sigma = 7  # 7
-                self.paf_sigma = 5  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
-
-                # TODO: the value of sigma is important, there should be an equal contribution between foreground
-                # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the
-                # network to converge to zero.
-                self.paf_thre = 1 * 8  # TODO: it is original 1.0 * stride in this program
-                #  为了生成在PAF时，计算limb端点边界时使用，在最后一个feature map上
-                # 将下界往下偏移1个象素质，把上界往上偏移1个像素值
-
-        self.transform_params = TransformationParams()
+        self.transform_params = TransformationParams(self.stride)
 
     @staticmethod  # staticmethod修饰的方法定义与普通函数是一样的, staticmethod支持类对象或者实例对方法的调用,即可使用A.f()或者a.f()
     def ltr_parts(parts_dict):
