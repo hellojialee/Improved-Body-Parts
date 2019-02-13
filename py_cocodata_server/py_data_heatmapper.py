@@ -42,11 +42,11 @@ class Heatmapper:
         # self.Y = self.Y + stride / 2 - 0.5
         #  经过考虑，对于PAF生成不需要这个，因为后面会在limb两端分别延长一个pixle，使得可以包括整个limb的范围
 
-    def create_heatmaps(self, joints, mask):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
+    def create_heatmaps(self, joints, mask_miss, mask_all):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
         """
         Create keypoint and body part heatmaps
         :param joints: input keypoint coordinates, np.float32 dtype is a very little faster
-        :param mask: mask areas without keypoint annotation
+        :param mask_miss: mask areas without keypoint annotation
         :return: Masked groundtruth heatmaps!
         """
         # print(joints.shape)  # 例如(3, 18, 3)，把每个main person作为图片的中心，但是依然可能会包括其他不同的人在这个裁剪后的图像中
@@ -57,7 +57,9 @@ class Heatmapper:
         # python切片函数　class slice(start, stop[, step])
 
         # Generate foreground of keypoint heat map FIXME: 使用mask all 作为背景信息
-        heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
+        # heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
+        heatmaps[:, :, self.config.bkg_start] = mask_all
+
         # # 某个位置的背景heatmap值定义为这个坐标位置处　最大的某个类型节点高斯响应的补 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # 如果加入的是前景而不是背景，则响应是　np.amax(heatmaps[:, :, sl], axis=2)
 
@@ -70,7 +72,7 @@ class Heatmapper:
         # heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # show一下看看生成的背景是否正常
 
-        heatmaps *= mask[:, :, np.newaxis]  # 重要！不要忘了将生成的groundtruth 乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
+        heatmaps *= mask_miss[:, :, np.newaxis]  # 重要！不要忘了将生成的groundtruth 乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
 
         # see: https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/124
         # Mask never touch pictures.  Mask不会叠加到image数据上

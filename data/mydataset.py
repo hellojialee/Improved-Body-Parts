@@ -48,8 +48,9 @@ if __name__ == '__main__':
                 show_labels = cv2.resize(labels, image.shape[:2], interpolation=cv2.INTER_CUBIC)
                 mask = cv2.resize(mask, image.shape[:2], interpolation=cv2.INTER_CUBIC)
                 plt.imshow(image[:, :, [2, 1, 0]])
-                plt.imshow(show_labels[:, :, -1], alpha=0.5)  # mask_all
-                plt.imshow(mask, alpha=0.5)  # mask_all
+                plt.imshow(np.repeat(show_labels[:, :, -1][:,:,None], 3, axis=2), alpha=0.5)  # mask_all
+                # print(show_labels[:, :, -2].min(), show_labels[:, :, -2].max())
+                plt.imshow(np.repeat(mask[:, :, None], 3, axis=2), alpha=0.5)  # mask_all
                 plt.show()
         print("%d samples" % batch)
         print("produce %d samples per second: " % (batch / (time() - start)))
@@ -59,4 +60,4 @@ if __name__ == '__main__':
 
     val_client = MyDataset(config, soureconfig, shuffle=False, augment=True)
     # test the data generator
-    test_augmentation_speed(val_client, False)
+    test_augmentation_speed(val_client, True)

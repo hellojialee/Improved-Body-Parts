@@ -39,28 +39,28 @@ class RawDataIterator:
             random.shuffle(self.keys)  # shuffle the self.keys
 
         # the same image may be accessed several times according to main persons
-        image, mask, meta, debug = self.read_data(self.keys[index])
+        image, mask_miss, mask_all, meta, debug = self.read_data(self.keys[index])
 
         # transform picture
-        assert mask.dtype == np.uint8, "Should be 'np.uint8' type, however %s is given" % mask.dtype
+        assert mask_miss.dtype == np.uint8, "Should be 'np.uint8' type, however %s is given" % mask_miss.dtype
         # joint annotation (meta['joints']) has already been converted in self.read_data()
         # transform() will return data as np.float32
-        image, mask, meta = self.transformer.transform(image, mask, meta,
-                                                       aug=None if self.augment else AugmentSelection.unrandom())
-        assert mask.dtype == np.float32, mask.dtype  # 因为在transformer.py中对mask做了立方插值的resize, 且　/225., 所以类型变成了float
+        image, mask_miss, mask_all, meta = self.transformer.transform(image, mask_miss, mask_all, meta,
+                                                        aug=None if self.augment else AugmentSelection.unrandom())
+        assert mask_miss.dtype == np.float32, mask_miss.dtype  # 因为在transformer.py中对mask做了立方插值的resize, 且　/225., 所以类型变成了float
+        assert mask_all.dtype == np.float32, mask_all.dtype  # 因为在transformer.py中对mask做了立方插值的resize, 且　/225., 所以类型变成了float
 
-        # we need layered mask on next stage  不进行通道的复制，利用pytorch中的broadcast，节省内存
-        # mask = self.configs[num].convert_mask(mask, self.global_config, joints=meta['joints'])  # mask复制成了57个通道
+        # we need layered mask_miss on next stage  不进行通道的复制，利用pytorch中的broadcast，节省内存
 
         # create heatmaps and pafs
-        labels = self.heatmapper.create_heatmaps(meta['joints'].astype(np.float32), mask)
+        labels = self.heatmapper.create_heatmaps(meta['joints'].astype(np.float32), mask_miss, mask_all)
 
         # # # debug for showing the generate keypoingt or body part heatmaps
         # show_labels = cv2.resize(labels, image.shape[:2], interpolation=cv2.INTER_CUBIC)
         # plt.imshow(image[:, :, [2, 1, 0]])
         # plt.imshow(show_labels[:, :, 10], alpha=0.5)  # mask_all
         # plt.show()
-        return image, mask, labels, meta['joints']
+        return image, mask_miss, labels, meta['joints']
 
     def read_data(self, key):
 
@@ -93,9 +93,9 @@ class RawDataIterator:
 
         img = data[:, :, 0:3]
         mask_miss = data[:, :, 4]
-        # mask = data[:,:,5]
+        mask_all = data[:,:,5]
 
-        return img, mask_miss, meta, debug
+        return img, mask_miss, mask_all, meta, debug
 
     def read_data_new(self, dataset, images, masks, key, config):
         """
@@ -114,22 +114,25 @@ class RawDataIterator:
         if len(img.shape) == 2 and img.shape[1] == 1:
             img = cv2.imdecode(img, flags=-1)
 
-        # if no mask is available, see the image storage operation in coco_mask_hdf5.py
+        # if no mask is available, see the image storage operation in coco_mask_hdf5.py, concat image and mask together
         if img.shape[2] > 3:
             mask_miss = img[:, :, 3]
             img = img[:, :, 0:3]
 
         if mask_miss is None:
             if masks is not None:
-                mask_miss = masks[meta['image']].value  # meta['image'] serves as index
+                mask_concat = masks[meta['image']].value  # meta['image'] serves as index
+
                 # if we use imencode in coco_mask_hdf5.py, otherwise skip it
-                if len(mask_miss.shape) == 2 and mask_miss.shape[1] == 1:
-                    mask_miss = cv2.imdecode(mask_miss, flags=-1)
+                # if len(mask_miss.shape) == 2 and mask_miss.shape[1] == 1:
+                #     mask_miss = cv2.imdecode(mask_miss, flags=-1)
 
+                mask_miss, mask_all = mask_concat[:, :, 0], mask_concat[:, :, 1]
         if mask_miss is None:  # 对于没有mask的image，为了后面计算的形式上能够统一，制造一个全是255的mask，这是为了兼容MPII数据集
-            mask_miss = np.full((img.shape[0], img.shape[1]), fill_value=255, dtype=np.uint8)
+            mask_miss = np.full((img.shape[0], img.shape[1]), fill_value=255, dtype=np.uint8)  # mask area are 0
+            mask_all = np.full((img.shape[0], img.shape[1]), fill_value=0, dtype=np.uint8)  # mask area are 1
 
-        return img, mask_miss, meta, debug
+        return img, mask_miss, mask_all, meta, debug
 
     def num_keys(self):
 

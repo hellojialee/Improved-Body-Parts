@@ -101,20 +101,20 @@ def make_mask(img_dir, img_id, img_anns, coco):
     mask_all *= 255  # 保存的　mask_miss　的数值非0即255
     # Mask miss is multiplied by the loss,
     # so masked areas are 0. (被mask的区域是0) I.e. second mask is real mask miss. First mask (mask_all) is just for visuals.
-    mask_concate = np.concatenate((mask_miss[:, :, np.newaxis], mask_all[:, :, np.newaxis]), axis=2)
+    mask_concat = np.concatenate((mask_miss[:, :, np.newaxis], mask_all[:, :, np.newaxis]), axis=2)
 
     # # # # ------------ 注释部分代码用来显示mask crowded instance  --------------
     # # # print('***************', mask_miss.min(), mask_miss.max())
     # plt.imshow(img[:,:,[2,1,0]])
     # plt.show()
-    # plt.imshow(np.repeat(mask_concate[:, :, 1][:,:,np.newaxis], 3, axis=2))  # mask_all
+    # plt.imshow(np.repeat(mask_concat[:, :, 1][:,:,np.newaxis], 3, axis=2))  # mask_all
     # plt.show()
-    # plt.imshow(np.repeat(mask_concate[:, :, 0][:,:,np.newaxis], 3, axis=2))  # mask_miss
+    # plt.imshow(np.repeat(mask_concat[:, :, 0][:,:,np.newaxis], 3, axis=2))  # mask_miss
     # plt.show()
     # print('show')
     # # # -------------------------------------------------------------------
 
-    return img,  mask_concate
+    return img,  mask_concat
 
 
 def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
@@ -285,7 +285,7 @@ def writeImage(grp, img_grp, data, img, mask_miss, count, image_id, mask_grp=Non
             # create_dataset 返回创建的hdf5对象(此处为img_ds)，并且此对象被添加到img_key(若dataset name不为None)中
             img_ds = img_grp.create_dataset(img_key, data=img_and_mask, chunks=None)
         else:
-            # _, img_bin = cv2.imencode(".jpg", img)  # we do not need it actually, delete cv2.imencode
+            # _, img_bin = cv2.imencode(".jpg", img)  # encode compress, we do not need it actually, delete cv2.imencode
             # _, img_mask = cv2.imencode(".png", mask_miss) # data= img_bin, data = img_mask
             img_ds1 = img_grp.create_dataset(img_key, data=img, chunks=None)
             img_ds2 = mask_grp.create_dataset(img_key, data=mask_miss, chunks=None)

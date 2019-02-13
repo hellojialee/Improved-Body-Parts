@@ -108,7 +108,7 @@ class Transformer:
         distorted_img = cv2.cvtColor(hsv_img, cv2.COLOR_HSV2BGR)
         return distorted_img
 
-    def transform(self, img, mask, meta, aug=None):
+    def transform(self, img, mask_miss, mask_all, meta, aug=None):
         """ If aug is None, then do random augmentation. Input original data and output transformed data """
 
         if aug is None:
@@ -135,11 +135,17 @@ class Transformer:
         # plt.show()
 
         # mask也要做一致的变换
-        mask_image_size = cv2.warpAffine(mask, M, (self.config.height, self.config.width), flags=cv2.INTER_LINEAR,
-                              borderMode=cv2.BORDER_CONSTANT, borderValue=255)
+        mask_miss = cv2.warpAffine(mask_miss, M, (self.config.height, self.config.width), flags=cv2.INTER_LINEAR,
+                              borderMode=cv2.BORDER_CONSTANT, borderValue=255)  # cv2.INTER_CUBIC适合放大
 
-        mask = cv2.resize(mask_image_size, self.config.mask_shape,     # mask shape　是统一的 46*46
-                          interpolation=cv2.INTER_CUBIC)  # TODO: should be combined with warp for speed
+        mask_miss = cv2.resize(mask_miss, self.config.mask_shape,     # mask shape　是统一的 46*46
+                          interpolation=cv2.INTER_AREA)
+
+        mask_all = cv2.warpAffine(mask_all, M, (self.config.height, self.config.width), flags=cv2.INTER_LINEAR,
+                              borderMode=cv2.BORDER_CONSTANT, borderValue=0)
+        #
+        mask_all = cv2.resize(mask_all, self.config.mask_shape,    # mask shape　是统一的 46*46
+                          interpolation=cv2.INTER_AREA)
 
         # # debug usage: show the image and corresponding mask area
         # # mask areas are in dark when display
@@ -174,5 +180,5 @@ class Transformer:
         # normalize image to 0~1 here to save gpu/cpu time
         # mask - 除以255之后，被mask地方是0.0,没有mask地方是1.0
         # return transformed data as flot32 format
-        return img.astype(np.float32) / 255., mask.astype(np.float32) / 255., meta
+        return img.astype(np.float32)/255., mask_miss.astype(np.float32)/255., mask_all.astype(np.float32)/255., meta
 

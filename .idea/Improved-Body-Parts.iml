@@ -3,6 +3,7 @@
   <component name="NewModuleRootManager">
     <content url="file://$MODULE_DIR$">
       <sourceFolder url="file://$MODULE_DIR$/py_cocodata_server" isTestSource="false" />
+      <sourceFolder url="file://$MODULE_DIR$/models" isTestSource="false" />
       <excludeFolder url="file://$MODULE_DIR$/data/dataset/coco" />
     </content>
     <orderEntry type="jdk" jdkName="Python 3.6 (pytorch)" jdkType="Python SDK" />
