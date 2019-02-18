@@ -25,7 +25,7 @@ class RawDataIterator:
         self.h5 = h5py.File(self.h5file, "r")
         self.datum = self.h5['datum'] if 'datum' in self.h5 \
             else (self.h5['dataset'], self.h5['images'], self.h5['masks'] if 'masks' in self.h5 else None)
-        self.heatmapper = Heatmapper(global_config)
+        self.heatmapper = Heatmapper(global_config)  # Heatmapper is a python class
         self.transformer = Transformer(global_config)
         self.augment = augment
         self.shuffle = shuffle
@@ -43,8 +43,8 @@ class RawDataIterator:
 
         # transform picture
         assert mask_miss.dtype == np.uint8, "Should be 'np.uint8' type, however %s is given" % mask_miss.dtype
-        # joint annotation (meta['joints']) has already been converted in self.read_data()
-        # transform() will return data as np.float32
+        # joint annotation (meta['joints']) has already been converted to our format in self.read_data()
+        # transform() will return np.float32 data which is within [0, 1]
         image, mask_miss, mask_all, meta = self.transformer.transform(image, mask_miss, mask_all, meta,
                                                         aug=None if self.augment else AugmentSelection.unrandom())
         assert mask_miss.dtype == np.float32, mask_miss.dtype  # 因为在transformer.py中对mask做了立方插值的resize, 且　/225., 所以类型变成了float
@@ -52,15 +52,17 @@ class RawDataIterator:
 
         # we need layered mask_miss on next stage  不进行通道的复制，利用pytorch中的broadcast，节省内存
 
-        # create heatmaps and pafs
-        labels = self.heatmapper.create_heatmaps(meta['joints'].astype(np.float32), mask_miss, mask_all)
+        # create heatmaps without mask
+        labels = self.heatmapper.create_heatmaps(meta['joints'].astype(np.float32), mask_all)
 
+        offsets, mask_offset = self.heatmapper.put_offset(meta['joints'].astype(np.float32))
         # # # debug for showing the generate keypoingt or body part heatmaps
         # show_labels = cv2.resize(labels, image.shape[:2], interpolation=cv2.INTER_CUBIC)
         # plt.imshow(image[:, :, [2, 1, 0]])
         # plt.imshow(show_labels[:, :, 10], alpha=0.5)  # mask_all
         # plt.show()
-        return image, mask_miss, labels, meta['joints']
+        return {'image': image, 'mask_miss': mask_miss, 'heatmaps': labels,
+                'offsets': offsets, 'mask_offset': mask_offset, 'keypoints': meta['joints']}
 
     def read_data(self, key):
 

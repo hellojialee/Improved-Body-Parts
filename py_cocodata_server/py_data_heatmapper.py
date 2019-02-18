@@ -2,6 +2,7 @@
 # coding:utf-8
 import numpy as np
 from math import sqrt, isnan, log, ceil
+import cv2
 
 
 class Heatmapper:
@@ -21,7 +22,8 @@ class Heatmapper:
         self.paf_sigma = config.transform_params.paf_sigma
         self.double_sigma2 = 2 * self.sigma * self.sigma
         self.gaussian_thre = config.transform_params.gaussian_thre  # set responses lower than gaussian_thre to 0
-        self.gaussian_size = (ceil(sqrt(-self.double_sigma2 * log(self.gaussian_thre))) // 2) * 2
+        self.gaussian_size = ceil((sqrt(-self.double_sigma2 * log(self.gaussian_thre))) / config.stride) * 2
+        self.offset_radius = self.gaussian_size // 2  # offset vector range
         self.thre = config.transform_params.paf_thre
 
         # cached common parameters which same for all iterations and all pictures
@@ -30,49 +32,46 @@ class Heatmapper:
         height = self.config.height // stride
 
         # x, y coordinates of centers of bigger grid, stride / 2 -0.5是为了在计算响应图时，使用grid的中心
-        self.grid_x = np.arange(width) * stride + stride / 2 - 0.5
-        self.grid_y = np.arange(height) * stride + stride / 2 - 0.5
+        self.grid_x = np.arange(width) * stride + stride / 2 - 0.5  # x -> width
+        self.grid_y = np.arange(height) * stride + stride / 2 - 0.5  # y -> height
 
         # x ,y indexes (type: int) of heatmap feature maps
         self.Y, self.X = np.mgrid[0:self.config.height:stride, 0:self.config.width:stride]
         # 对<numpy.lib.index_tricks.MGridClass object> slice操作，比如L[:10:2]前10个数，每隔两个取一个
-        # # TODO: check it again
         # # basically we should use center of grid, but in this place classic implementation uses left-top point.
-        # self.X = self.X + stride / 2 - 0.5
-        # self.Y = self.Y + stride / 2 - 0.5
-        #  经过考虑，对于PAF生成不需要这个，因为后面会在limb两端分别延长一个pixle，使得可以包括整个limb的范围
+        self.X = self.X + stride / 2 - 0.5
+        self.Y = self.Y + stride / 2 - 0.5
 
-    def create_heatmaps(self, joints, mask_miss, mask_all):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
+    def create_heatmaps(self, joints,  mask_all):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
         """
         Create keypoint and body part heatmaps
         :param joints: input keypoint coordinates, np.float32 dtype is a very little faster
         :param mask_miss: mask areas without keypoint annotation
+        :param mask_all: all person (including crowd) area mask (denoted as 1)
         :return: Masked groundtruth heatmaps!
         """
         # print(joints.shape)  # 例如(3, 18, 3)，把每个main person作为图片的中心，但是依然可能会包括其他不同的人在这个裁剪后的图像中
         heatmaps = np.zeros(self.config.parts_shape, dtype=np.float32)  # config.parts_shape: 46, 46, 57
         # 此处的heat map一共有57个channel，包含了heat map以及paf以及背景channel。并且对heat map初始化为0很重要，因为这样使得没有标注的区域是没有值的！
-        self.put_joints(heatmaps, joints)  # fixme: 和put_limbs学习，也加slice减少整个heatmap的计算量
-        sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)
+        self.put_joints(heatmaps, joints)
+        # sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)
         # python切片函数　class slice(start, stop[, step])
-
-        # Generate foreground of keypoint heat map FIXME: 使用mask all 作为背景信息
+        # Generate foreground of keypoint heat map 删除了一些代码，原始请参考之前对body part项目
         # heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
-        heatmaps[:, :, self.config.bkg_start] = mask_all
 
         # # 某个位置的背景heatmap值定义为这个坐标位置处　最大的某个类型节点高斯响应的补 1. - np.amax(heatmaps[:, :, sl], axis=2)
         # 如果加入的是前景而不是背景，则响应是　np.amax(heatmaps[:, :, sl], axis=2)
 
         self.put_limbs(heatmaps, joints)
 
-        # todo: add paf background and merge with the keypoint background
-        # sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)
-        # ##  如果同时添加了keypoint和limb的背景类channel，则换成如下代码
-        # # # sl = slice(self.config.paf_start, self.config.heat_start + self.config.heat_layers)
-        # heatmaps[:, :, self.config.bkg_start] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
-        # show一下看看生成的背景是否正常
+        # add foreground (mask_all) channel
+        kernel = np.ones((3, 3), np.uint8)
+        mask_all = cv2.erode(mask_all, kernel)  # crop the boundary of mask_all
+        heatmaps[:, :, self.config.bkg_start] = mask_all
 
-        heatmaps *= mask_miss[:, :, np.newaxis]  # 重要！不要忘了将生成的groundtruth 乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
+        # 重要！不要忘了将生成的groundtruth heatmap乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
+        # 并且，背景的mask_all没有乘以mask_miss，训练时只是对没有关键点标注的heatmap区域mask掉不做监督，而不需要对输入图片mask!
+        # heatmaps *= mask_miss[:, :, np.newaxis]  # fixme: 放在loss计算中，对mask_all不需要乘mask_miss，不缺标注
 
         # see: https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/124
         # Mask never touch pictures.  Mask不会叠加到image数据上
@@ -98,9 +97,7 @@ class Heatmapper:
             # 这里是个技巧，grid_x其实取值范围是0~368，起点是3.5，终点值是363.5，间隔为8，这样就是在原始368个位置上计算高斯值，
             # 采样了46个点，从而最大程度保留了原始分辨率尺寸上的响应值，避免量化误差！而不是生成原始分辨率大小的ground truth然后缩小8倍　　
 
-            # 如果使用高斯分布：
-            # fixme: 限制guassin response生成的区域
-
+            # 如果使用高斯分布，限制guassin response生成的区域，以此加快运算
             x_min = int(round(joints[i, 0] / self.config.stride) - self.gaussian_size // 2)
             x_max = int(round(joints[i, 0] / self.config.stride) + self.gaussian_size // 2 + 1)
             y_min = int(round(joints[i, 1] / self.config.stride) - self.gaussian_size // 2)
@@ -118,6 +115,8 @@ class Heatmapper:
             if y_min < 0:
                 y_min = 0
 
+            # this slice is not only speed up but crops the keypoints off the transformed picture really
+            # slice can also crop the extended index of a numpy array and return empty array []
             slice_x = slice(x_min, x_max)
             slice_y = slice(y_min, y_max)
 
@@ -148,14 +147,13 @@ class Heatmapper:
     def put_joints(self, heatmaps, joints):
 
         for i in range(self.config.num_parts):  # len(config.num_parts) = 18, 不包括背景keypoint
-            visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered
+            visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered !
             self.put_gaussian_maps(heatmaps, i, joints[visible, i, 0:2])  # 逐个channel地进行ground truth的生成
 
-    def put_vector_maps(self, heatmaps, layer, joint_from, joint_to):
+    def put_limb_gaussian_maps(self, heatmaps, layer, joint_from, joint_to):
         """
         生成一个channel上的PAF groundtruth
         """
-        # 实际上作者曹哲说的方式是在两个关键点画椭圆，调参数，加单位矢量。
 
         count = np.zeros(heatmaps.shape[:-1], dtype=np.float32)  # count用来记录某一个位置点上有多少非零的paf，以便后面做平均
         for i in range(joint_from.shape[0]):
@@ -201,12 +199,11 @@ class Heatmapper:
                              self.gaussian_thre)
             # 这里求的距离是在原始尺寸368*368的尺寸，而不是缩小8倍后在46*46上的距离，然后放到46*46切片slice的位置上去
             # print(dist.shape)
-            # TODO: averaging by pafs mentioned in the paper but never worked in C++ augmentation code
             heatmaps[slice_y, slice_x, layer][dist > 0] += dist[dist > 0]  # = dist * dx　若不做平均，则不进行累加
 
             count[slice_y, slice_x][dist > 0] += 1
 
-        # TODO fixme: averaging by pafs mentioned in the paper but never worked in C++ augmentation code 我采用了平均
+        #  averaging by pafs mentioned in the paper but never worked in C++ augmentation code 我采用了平均
         heatmaps[:, :, layer][count > 0] /= count[count > 0]  # 这些都是矢量化（矩阵）操作
 
     def put_limbs(self, heatmaps, joints):
@@ -220,13 +217,59 @@ class Heatmapper:
             # In this project:  0 - marked but invisible, 1 - marked and visible, which is different from coco　dataset
 
             layer = self.config.paf_start + i
-            self.put_vector_maps(heatmaps, layer, joints[visible, fr, 0:2], joints[visible, to, 0:2])
+            self.put_limb_gaussian_maps(heatmaps, layer, joints[visible, fr, 0:2], joints[visible, to, 0:2])
 
+    def put_offset_vector_maps(self, offset_vectors, mask_offset, layer, joints):
+        for i in range(joints.shape[0]):
+            x_min = int(round(joints[i, 0] / self.config.stride) - self.offset_radius // 2)
+            x_max = int(round(joints[i, 0] / self.config.stride) + self.offset_radius // 2 + 1)
+            y_min = int(round(joints[i, 1] / self.config.stride) - self.offset_radius // 2)
+            y_max = int(round(joints[i, 1] / self.config.stride) + self.offset_radius // 2 + 1)
 
-# parallel calculation distance from any number of points of arbitrary shape(X, Y),
-# to line defined by segment (x1,y1) -> (x2, y2)
+            if y_max < 0:
+                continue
+
+            if x_max < 0:
+                continue
+
+            if x_min < 0:
+                x_min = 0
+
+            if y_min < 0:
+                y_min = 0
+
+            # this slice is not only speed up but crops the keypoints off the transformed picture really
+            # slice can also crop the extended index of a numpy array and return empty array []
+            slice_x = slice(x_min, x_max)
+            slice_y = slice(y_min, y_max)
+
+            offset_x = (self.grid_x[slice_x].astype(np.float32) - joints[i, 0])  # type: np.ndarray # joints[i, 0] -> x
+            offset_y = (self.grid_y[slice_y].astype(np.float32) - joints[i, 1])  # type: np.ndarray # joints[i, 1] -> y
+            offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
+            offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
+
+            offset_vectors[slice_y, slice_x, layer * 2] += offset_x_mesh
+            offset_vectors[slice_y, slice_x, layer * 2 + 1] += offset_y_mesh
+            mask_offset[slice_y, slice_x, layer * 2] += 1
+            mask_offset[slice_y, slice_x, layer * 2 + 1] += 1
+
+    def put_offset(self, joints):
+        offset_vectors = np.zeros(self.config.offset_shape, dtype=np.float32)
+        mask_offset = np.zeros(self.config.offset_shape, dtype=np.float32)
+        assert offset_vectors.shape[-1] == 2 * self.config.num_parts, 'offset map depth dose not match keypoint number'
+
+        for i in range(self.config.num_parts):  # len(config.num_parts) = 18, 不包括背景keypoint
+            visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered !
+            self.put_offset_vector_maps(offset_vectors, mask_offset, i, joints[visible, i, 0:2])
+
+        offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]
+        mask_offset[mask_offset > 0] = 1
+
+        return offset_vectors, mask_offset
+
 
 def gaussian(sigma, x, u):
+
     double_sigma2 = 2 * sigma ** 2
     y = np.exp(- (x - u) ** 2 / double_sigma2)
     return y
@@ -239,7 +282,8 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     # 点到两个端点所确定的直线的距离　classic formula is:
     # # d = [(x2-x1)*(y1-y)-(x1-x)*(y2-y1)] / sqrt((x2-x1)**2 + (y2-y1)**2)
     """
-
+    # parallel calculation distance from any number of points of arbitrary shape(X, Y),
+    # to line defined by segment (x1,y1) -> (x2, y2)
     xD = (x2 - x1)
     yD = (y2 - y1)
     detaX = x1 - X

@@ -24,7 +24,7 @@ class TransformationParams:
         # network to converge to zero.
         self.paf_thre = 1 * stride  # equals to 1.0 * stride in this program, used to include the end-points of limbs 
         #  为了生成在PAF时，计算limb端点边界时使用，在最后一个feature map上
-        # 将下界往下偏移1个象素质，把上界往上偏移1个像素值
+        # 将下界往下偏移1*stride像素质，把上界往上偏移1*stride个像素值
 
 
 class CanonicalConfig:
@@ -68,9 +68,12 @@ class CanonicalConfig:
         self.heat_start = self.paf_layers  # Notice: 此处channel安排上，paf_map在前，heat_map在后
         self.bkg_start = self.paf_layers + self.heat_layers  # 用于feature map的计数
 
-        # 　self.data_shape = (self.height, self.width, 3)     # 368, 368, 3  # 为了训练网络
+        self.offset_layers = 2 * self.num_parts
+        self.offset_start = self.num_layers
+
         self.mask_shape = (self.height // self.stride, self.width // self.stride)  # 46, 46
         self.parts_shape = (self.height // self.stride, self.width // self.stride, self.num_layers)  # 46, 46, 59
+        self.offset_shape = (self.height // self.stride, self.width // self.stride, self.offset_layers)
 
         self.transform_params = TransformationParams(self.stride)
 
@@ -213,4 +216,4 @@ def GetConfig(config_name):
 if __name__ == "__main__":
     # test it
     foo = GetConfig("Canonical")
-    print('the number of paf_layers is: %d, and the number of het_layer is: %d' % (foo.paf_layers, foo.heat_layers))
+    print('the number of paf_layers is: %d, and the number of heat_layer is: %d' % (foo.paf_layers, foo.heat_layers))

@@ -1,5 +1,5 @@
+import math
 import torch
-from torch.autograd import Variable
 from torch import nn
 from models.layers import Conv, Hourglass
 
@@ -32,7 +32,7 @@ class Features(nn.Module):
 
 
 class PoseNet(nn.Module):
-    def __init__(self, nstack, inp_dim, oup_dim, bn=False, increase=128, **kwargs):
+    def __init__(self, nstack, inp_dim, oup_dim, bn=False, increase=128, init_weights=True, **kwargs):
         """
         Pack or initialize the trainable parameters of the network
         :param nstack: number of stack
@@ -63,9 +63,11 @@ class PoseNet(nn.Module):
         self.merge_preds = nn.ModuleList(
             [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase) for j in range(5)]) for i in range(nstack - 1)])
         self.nstack = nstack
+        if init_weights:
+            self._initialize_weights()
 
     def forward(self, imgs):
-        # input tensor: imgs, shape=(N, H, W, C). Pre-processing of input image was done in data generator
+        # Input Tensor: imgs within [0,1], shape=(N, H, W, C). Pre-processing was done in data generator
         x = imgs.permute(0, 3, 1, 2)  # Permute the dimensions of images to (N, C, H, W)
         x = self.pre(x)
         pred = []
@@ -84,7 +86,7 @@ class PoseNet(nn.Module):
             # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 
-            for j in range(5):  # handle 5 scales
+            for j in range(5):  # handle 5 scales of heatmaps
                 preds_instack.append(self.outs[i][j](features_instack[j]))
                 if i != self.nstack - 1:
                     if j == 0:
@@ -97,6 +99,7 @@ class PoseNet(nn.Module):
             pred.append(preds_instack)
         # returned list shape: [nstack * [128*128, 64*64, 32*32, 16*16, 8*8]]
         return pred
+
 
     def calc_loss(self, preds, keypoints=None, heatmaps=None, masks=None):
         dets = preds[:, :, :17]
@@ -117,13 +120,31 @@ class PoseNet(nn.Module):
         detection_loss = torch.stack(detection_loss, dim=1)
         return tag_loss[:, :, 0], tag_loss[:, :, 1], detection_loss
 
+    def _initialize_weights(self):
+        for m in self.modules():
+            # 卷积的初始化方法
+            if isinstance(m, nn.Conv2d):
+                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                m.weight.data.normal_(0, math.sqrt(2. / n))  # He, 方差为2/n.  或者直接使用现成的nn.init中的函数
+                # torch.nn.init.uniform_(tensorx)
+                # bias都初始化为0
+                if m.bias is not None:  # 当有BN层时，卷积层Con不加bias！
+                    m.bias.data.zero_()
+            # batchnorm使用全1初始化 bias全0
+            elif isinstance(m, nn.BatchNorm2d):
+                m.weight.data.fill_(1)
+                m.bias.data.zero_()
+
+            elif isinstance(m, nn.Linear):
+                torch.nn.init.normal_(m.weight.data, 0, 0.01)  # m.weight.data.normal_(0, 0.01) m.bias.data.zero_()
+
 
 if __name__ == '__main__':
     from time import time
 
-    pose = PoseNet(4, 256, 54).cuda()
+    pose = PoseNet(4, 256, 54)  # .cuda()
     t0 = time()
-    input = torch.rand(10, 512, 512, 3).cuda()
+    input = torch.rand(1, 128, 128, 3)  # .cuda()
     print(pose)
     output = pose(input)  # type: torch.Tensor
     output[0][0].sum().backward()

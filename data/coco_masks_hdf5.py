@@ -89,7 +89,7 @@ def make_mask(img_dir, img_id, img_anns, coco):
     elif flag == 1:
         # mask the few keypoint and crowded persons at the same time ! mask areas are 0 !
         mask_miss = np.logical_not(np.bitwise_or(mask_miss, mask_crowd))
-        # mask all the persons including crowded, mask area are 1 !
+        # mask all the persons including crowd, mask area are 1 !
         mask_all = np.bitwise_or(mask_all, mask_crowd)
     else:
         raise Exception("crowd segments > 1")  # 对一个区域，只能存在一个segment,不存在一个区域同时属于某两个instances的部分
@@ -143,7 +143,7 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
         pers["joint"] = np.zeros((17, 3))
         for part in range(17):
             pers["joint"][part, 0] = anno[part * 3]  # x坐标， 因为每一个part的信息有(x, y, v) 3个值
-            pers["joint"][part, 1] = anno[part * 3 + 1]  # y坐标
+            pers["joint"][part, 1] = anno[part * 3 + 1]  # y坐标，注意x，y坐标的先后顺序
 
             # visible/invisible
             # COCO - Each keypoint has a 0-indexed location x,y and a visibility flag v defined as v=0: not labeled (in which case x=y=0), v=1: labeled but not visible, and v=2: labeled and visible.

@@ -154,7 +154,7 @@ class Transformer:
         # plt.show()
 
         # warp key points
-        # TODO: joint could be cropped by augmentation, in this case we should mark it as invisible.
+        # Issue: joint could be cropped by augmentation, in this case we should mark it as invisible.
         # update: may be we don't need it actually, original code removed part sliced more than half totally,
         # may be we should keep it
         original_points = meta['joints'].copy()
