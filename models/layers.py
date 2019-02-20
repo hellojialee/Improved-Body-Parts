@@ -7,13 +7,6 @@ import cv2
 import torch
 
 
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        n = m.kernel_size[0] * m.kernel_size[1] * m.in_channels
-        m.weight.data.normal_(0, (1. / n) ** 0.5)
-
-
 class Residual(nn.Module):
     """Residual Block for original Hourglass Network"""
     def __init__(self,ins,outs):
@@ -72,7 +65,7 @@ class Hourglass(nn.Module):
     """Instantiate an n order Hourglass Network block using recursive trick."""
     def __init__(self, depth, nFeat, increase=128, bn=False, resBlock=Conv):
         super(Hourglass, self).__init__()
-        self.depth = depth
+        self.depth = depth  # oder number
         self.nFeat = nFeat  # input and output channels
         self.increase = increase  # increased channels while the depth grows
         self.bn = bn
@@ -81,7 +74,7 @@ class Hourglass(nn.Module):
         self.hg = self._make_hour_glass()
         self.downsample = nn.MaxPool2d(2, 2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.up_fms = []
+        self.up_fms = []  # collect feature maps produced by low2 at every scale
 
     def _make_single_residual(self, depth_id):
         # the innermost conve layer, return as an element

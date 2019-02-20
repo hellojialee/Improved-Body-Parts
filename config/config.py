@@ -3,6 +3,17 @@
 import numpy as np
 
 
+class TrainingOpt:
+    batch_size = 8
+    learning_rate = 1e-3
+    config_name = "Canonical"
+    hdf5_train_data = "./data/dataset/coco/coco_train_dataset512.h5"
+    hdf5_val_data = "./data/dataset/coco/coco_val_dataset512.h5"
+    hourglass_order = 4
+    hourglass_inp_dim = 256
+    ckpt_path = './checkpoints/ssd300_mAP_77.43_v2.pth'
+
+
 class TransformationParams:
     """ Hyper-parameters """
     def __init__(self, stride):
@@ -62,7 +73,7 @@ class CanonicalConfig:
 
         self.paf_layers = len(self.limbs_conn)
         self.heat_layers = self.num_parts
-        self.num_layers = self.paf_layers + self.heat_layers + 1  # FIXME : remove background + 1  # +1指的是加上background
+        self.num_layers = self.paf_layers + self.heat_layers + 1  # layers of keypoint and body part heatmaps
 
         self.paf_start = 0
         self.heat_start = self.paf_layers  # Notice: 此处channel安排上，paf_map在前，heat_map在后
@@ -188,9 +199,6 @@ class COCOSourceConfig:
 
 Configs = {}
 Configs["Canonical"] = CanonicalConfig
-
-
-# Configs['COCOSource'] = COCOSourceConfig
 
 
 def GetConfig(config_name):

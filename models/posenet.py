@@ -67,7 +67,7 @@ class PoseNet(nn.Module):
             self._initialize_weights()
 
     def forward(self, imgs):
-        # Input Tensor: imgs within [0,1], shape=(N, H, W, C). Pre-processing was done in data generator
+        # Input Tensor: a batch of images within [0,1], shape=(N, H, W, C). Pre-processing was done in data generator
         x = imgs.permute(0, 3, 1, 2)  # Permute the dimensions of images to (N, C, H, W)
         x = self.pre(x)
         pred = []
@@ -143,6 +143,11 @@ if __name__ == '__main__':
     from time import time
 
     pose = PoseNet(4, 256, 54)  # .cuda()
+    for param in pose.parameters():
+        if param.requires_grad:
+            print('param autograd')
+            break
+
     t0 = time()
     input = torch.rand(1, 128, 128, 3)  # .cuda()
     print(pose)
