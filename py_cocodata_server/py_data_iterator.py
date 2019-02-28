@@ -13,12 +13,12 @@ import matplotlib.pyplot as plt
 
 class RawDataIterator:
     """ The real DataIterator which generates the training materials"""
-    def __init__(self, global_config, config, shuffle=True, augment=True):
+    def __init__(self, global_config, config, shuffle=True, augment=False):
         """
         :param global_config: configuration used in our project
         :param config: original configuration used in COCO database
         :param shuffle:  # fixme: 可以在pytorch的dataloader类中选择内置的shuffle
-        :param augment:
+        :param augment: data augmentation
         """
         self.global_config = global_config
         self.config = config  # self.configs can be a list to hold several separate configs or only one config
@@ -67,8 +67,8 @@ class RawDataIterator:
         # plt.imshow(image[:, :, [2, 1, 0]])
         # plt.imshow(show_labels[:, :, 10], alpha=0.5)  # mask_all
         # plt.show()
-        return torch.from_numpy(image), torch.from_numpy(mask_miss), torch.from_numpy(labels), torch.from_numpy(
-            offsets), torch.from_numpy(mask_offset)
+        return torch.from_numpy(image), torch.from_numpy(mask_miss[np.newaxis, :, :]), \
+            torch.from_numpy(labels), torch.from_numpy(offsets), torch.from_numpy(mask_offset)
 
     def read_data(self, key):
 

@@ -7,9 +7,12 @@ class TrainingOpt:
     batch_size = 8
     learning_rate = 1e-3
     config_name = "Canonical"
-    hdf5_train_data = "./data/dataset/coco/coco_train_dataset512.h5"
-    hdf5_val_data = "./data/dataset/coco/coco_val_dataset512.h5"
-    hourglass_order = 4
+    hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"
+    hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset512.h5"
+    nstack = 4  # stacked number of hourglass
+    nstack_weight = [1, 1, 1, 1]  # weight the losses between different stacks
+    scale_weight = [1, 1, 1, 1, 1]  # weight the losses between different scales
+    multi_task_weight = [1, 1]  # heatmap loss vs offset loss
     hourglass_inp_dim = 256
     ckpt_path = './checkpoints/ssd300_mAP_77.43_v2.pth'
 
@@ -24,7 +27,7 @@ class TransformationParams:
         self.scale_min = 0.8
         self.scale_max = 1.2
         self.max_rotate_degree = 40.  # todo: 看看hourglass中512设置的偏移
-        self.center_perterb_max = 40.  # shift augmentation
+        self.center_perterb_max = 50.  # shift augmentation
         self.flip_prob = 0.5
         self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7
@@ -138,7 +141,7 @@ class COCOSourceConfig:
                 # assert global_id != 2, "navel shouldn't be known yet"
                 result[:, global_id, :] = joints[:, coco_id, :]
 
-        if 'neck' in global_config.parts_dict:  # todo: 控制是否考虑额外增加的节点　neck
+        if 'neck' in global_config.parts_dict:  # neck point works as a root note
             neckG = global_config.parts_dict['neck']
             # parts_dict['neck']　＝　１, parts_dict是前面定义过的字典类型，节点名称：序号
             RshoC = self.parts_dict['Rsho']
@@ -163,7 +166,7 @@ class COCOSourceConfig:
                                                                 joints[both_shoulders_known, LshoC, 2])
             # 最后一位是 visible　标志位，如果两个节点中有任何一个节点不可见，则中间节点neck设为不可见
 
-        if 'navel' in global_config.parts_dict:  # todo: 控制是否考虑额外增加的节点　add navel keypoint
+        if 'navel' in global_config.parts_dict:  # add navel keypoint or not?
             navelG = global_config.parts_dict['navel']
             # parts_dict['navel']　＝ 2, parts_dict是前面定义过的字典类型，节点名称：序号
             RhipC = self.parts_dict['Rhip']

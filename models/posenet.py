@@ -81,8 +81,8 @@ class PoseNet(nn.Module):
                 features__cache = [torch.zeros_like(hourglass_feature[k + 1]) for k in range(4)]
             else:  # res connection cross stages
                 for k in range(4):
-                    hourglass_feature[k + 1] += features__cache[k]
-
+                    #  python里面的+=, ，*=也是in-place operation,需要注意
+                    hourglass_feature[k + 1] = hourglass_feature[k + 1] + features__cache[k]
             # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 
@@ -100,32 +100,14 @@ class PoseNet(nn.Module):
         # returned list shape: [nstack * [128*128, 64*64, 32*32, 16*16, 8*8]]
         return pred
 
-
-    def calc_loss(self, preds, keypoints=None, heatmaps=None, masks=None):
-        dets = preds[:, :, :17]
-        tags = preds[:, :, 17:34]
-
-        keypoints = keypoints.cpu().long()
-        batchsize = tags.size()[0]
-
-        tag_loss = []
-        for i in range(self.nstack):
-            tag = tags[:, i].contiguous().view(batchsize, -1, 1)
-            tag_loss.append(self.myAEloss(tag, keypoints))
-        tag_loss = torch.stack(tag_loss, dim=1).cuda(tags.get_device())
-
-        detection_loss = []
-        for i in range(self.nstack):
-            detection_loss.append(self.heatmapLoss(dets[:, i], heatmaps, masks))
-        detection_loss = torch.stack(detection_loss, dim=1)
-        return tag_loss[:, :, 0], tag_loss[:, :, 1], detection_loss
-
     def _initialize_weights(self):
         for m in self.modules():
             # 卷积的初始化方法
             if isinstance(m, nn.Conv2d):
-                n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
-                m.weight.data.normal_(0, math.sqrt(2. / n))  # He, 方差为2/n.  或者直接使用现成的nn.init中的函数
+                # TODO: 使用正态分布进行初始化（0, 0.01) 网络权重看看
+                # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
+                # He kaiming 初始化, 方差为2/n. math.sqrt(2. / n) 或者直接使用现成的nn.init中的函数。在这里会梯度爆炸
+                m.weight.data.normal_(0, 0.01)    # # math.sqrt(2. / n)
                 # torch.nn.init.uniform_(tensorx)
                 # bias都初始化为0
                 if m.bias is not None:  # 当有BN层时，卷积层Con不加bias！
@@ -152,13 +134,14 @@ if __name__ == '__main__':
     input = torch.rand(1, 128, 128, 3)  # .cuda()
     print(pose)
     output = pose(input)  # type: torch.Tensor
+
     output[0][0].sum().backward()
     t1 = time()
     print('********** Consuming Time is: {} second  **********'.format(t1 - t0))
 
-    #
+    # #
     # import torch.onnx
     #
-    # pose = PoseNet(3, 256, 34)
+    # pose = PoseNet(4, 256, 34)
     # dummy_input = torch.randn(1, 512, 512, 3)
-    # torch.onnx.export(pose, dummy_input, "posenet.onnx")
+    # torch.onnx.export(pose, dummy_input, "posenet.onnx")  # netron --host=localhost
