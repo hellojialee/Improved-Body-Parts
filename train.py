@@ -8,7 +8,7 @@ import torch.optim as optim
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 from data.mydataset import MyDataset
 from torch.utils.data import DataLoader
-from models.posenet import PoseNet
+from models.posenet import PoseNet, PoseNet_easy
 from models.loss_model import MultiTaskLoss
 import warnings
 warnings.filterwarnings("ignore")
@@ -19,8 +19,10 @@ args = parser.parse_args()
 
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
-soureconfig = COCOSourceConfig(opt.hdf5_val_data)
+soureconfig = COCOSourceConfig(opt.hdf5_train_data)
+print('start loading the data......')
 val_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
+print('loading the data finish......')
 val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=8,
                         pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
 
@@ -42,7 +44,7 @@ use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
 
-posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers)
+posenet = PoseNet_easy(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers)
 
 if args.resume:
     print(' # Resuming from checkpoint # ')
@@ -94,7 +96,7 @@ def train(epoch):
         output_tuple = posenet(images)
         # print(loc_preds.requires_grad)
         # print(conf_preds.requires_grad)
-        loss = criterion(output_tuple, target_tuple[1:])
+        loss = criterion(output_tuple.permute(1,0,2,3,4), target_tuple[1:])
         # print(loss.requires_grad)
         loss.backward()  # retain_graph=True
         optimizer.step()
@@ -106,5 +108,6 @@ def train(epoch):
 
 
 if __name__ == '__main__':
-    for epoch in range(start_epoch, start_epoch + 200):
+    for epoch in range(start_epoch, start_epoch + 2):
         train(epoch)
+        torch.save(posenet.state_dict(), 'posemodel.pkl')

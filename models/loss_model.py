@@ -29,10 +29,9 @@ class MultiTaskLoss(nn.Module):
         # we use 4 stacks, 5 scales
         # TODO: 是用5个不同scale好还是4个scale监督好？
         assert self.batch_size == target_tuple[0].shape[0], 'batch size {} not match'.format(pred_tuple[0].shape[0])
-        pred_scale_tensors = [torch.cat([pred_tuple[j][i][None, ...] for j in range(self.nstck)], dim=0) for i in
-                              range(5)]
+        pred_scale_tensors = [pred_tuple]
         loss_scales = [self._loss_per_scale(pred_scale_tensors[i], target_tuple) * self.scale_weight[i] for i in
-                       range(5)]
+                       range(1)]
         loss_per_batch = sum(loss_scales) / len(self.scale_weight)
         return loss_per_batch
 
@@ -77,7 +76,7 @@ class MultiTaskLoss(nn.Module):
         st = torch.where(torch.ge(sxing, 0.01), s, 1 - s)
         factor = (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
-        out = (s - sxing) ** 2 * factor * mask_miss  # type: torch.Tensor
+        out = (s - sxing) ** 2 * mask_miss  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
@@ -86,16 +85,16 @@ class MultiTaskLoss(nn.Module):
         return loss
 
     @staticmethod
-    def l1_loss(pred, target, mask_all, nstack_weight=[1, 1, 1, 1]):
+    def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):
         """
         Compute the smooth L1 loss of offset feature maps
         :param pred: predicted tensor (nstack, batch, channel, height, width), predicted feature maps
         :param target: target tensor (nstack, batch, channel, height, width)
-        :param mask_all: tensor (nstack, batch, channel, height, width)
+        :param mask_offset: tensor (nstack, batch, channel, height, width)
         :param nstack_weight:
         :return:
         """
-        out = torch.abs(pred - target) * mask_all  # type: torch.Tensor
+        out = torch.abs(pred - target) * mask_offset  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight

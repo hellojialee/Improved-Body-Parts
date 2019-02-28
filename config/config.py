@@ -4,15 +4,15 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 8
-    learning_rate = 1e-3
+    batch_size = 10
+    learning_rate = 1e-4
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"
     hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset512.h5"
     nstack = 4  # stacked number of hourglass
-    nstack_weight = [1, 1, 1, 1]  # weight the losses between different stacks
+    nstack_weight = [0.2, 0.5, 0.8, 1]  # weight the losses between different stacks
     scale_weight = [1, 1, 1, 1, 1]  # weight the losses between different scales
-    multi_task_weight = [1, 1]  # heatmap loss vs offset loss
+    multi_task_weight = [0.1, 1]  # heatmap loss vs offset loss
     hourglass_inp_dim = 256
     ckpt_path = './checkpoints/ssd300_mAP_77.43_v2.pth'
 

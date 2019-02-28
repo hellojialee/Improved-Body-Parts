@@ -52,8 +52,8 @@ class Conv(nn.Module):
 
     def forward(self, x):
         # examine the input channel equals the conve kernel channel
-        assert x.size()[1] == self.inp_dim, "input channel {} dese not fit kernel channel {}".format(x.size()[1],
-                                                                                                     self.inp_dim)
+        # assert x.size()[1] == self.inp_dim, \
+        #     "input channel {} dese not fit kernel channel {}".format(x.size()[1], self.inp_dim)
         x = self.conv(x)
         if self.relu is not None:
             x = self.relu(x)
@@ -96,12 +96,12 @@ class Hourglass(nn.Module):
         :return: conve layers packed in n hourglass blocks
         """
         hg = []
-        for i in range(self.depth):
+        for d_th in range(self.depth):
             #  skip path; up_residual_block; down_residual_block_path,
             # 0 ~ n-2 (except the outermost n-1 order) need 3 residual blocks
-            res = self._make_lower_residual(i)  # type:list
-            if i == (self.depth - 1):  # the deepest path (i.e. the longest path) need 4 residual blocks
-                res.append(self._make_single_residual(i))  # list append an element
+            res = self._make_lower_residual(d_th)  # type:list
+            if d_th == (self.depth - 1):  # the deepest path (i.e. the longest path) need 4 residual blocks
+                res.append(self._make_single_residual(d_th))  # list append an element
             hg.append(nn.ModuleList(res))  # pack conve layers of  every oder of hourglass block
         return nn.ModuleList(hg)
 
@@ -133,6 +133,31 @@ class Hourglass(nn.Module):
         """
         return [self._hour_glass_forward(0, x), self.up_fms[3], self.up_fms[2], self.up_fms[1], self.up_fms[0]]
 
+
+class Hourglass_easy(nn.Module):
+    def __init__(self, n, f, bn=None, increase=128):
+        super(Hourglass_easy, self).__init__()
+        nf = f + increase
+        self.up1 = Conv(f, f, 3, bn=bn)
+        # Lower branch
+        self.pool1 = nn.MaxPool2d(2, 2)
+        self.low1 = Conv(f, nf, 3, bn=bn)
+        # Recursive hourglass
+        if n > 1:
+            self.low2 = Hourglass_easy(n - 1, nf, bn=bn)
+        else:
+            self.low2 = Conv(nf, nf, 3, bn=bn)
+        self.low3 = Conv(nf, f, 3)
+        self.up2 = nn.UpsamplingNearest2d(scale_factor=2)
+
+    def forward(self, x):
+        up1 = self.up1(x)
+        pool1 = self.pool1(x)
+        low1 = self.low1(pool1)
+        low2 = self.low2(low1)
+        low3 = self.low3(low2)
+        up2 = self.up2(low3)
+        return up1 + up2
 
 if __name__ == '__main__':
 
