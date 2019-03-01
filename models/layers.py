@@ -9,18 +9,19 @@ import torch
 
 class Residual(nn.Module):
     """Residual Block for original Hourglass Network"""
-    def __init__(self,ins,outs):
-        super(Residual,self).__init__()
+
+    def __init__(self, ins, outs):
+        super(Residual, self).__init__()
         self.convBlock = nn.Sequential(
             nn.BatchNorm2d(ins),
             nn.ReLU(inplace=True),
             nn.Conv2d(ins,outs//2,1),
             nn.BatchNorm2d(outs//2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(outs//2,outs//2,3,1,1),
-            nn.BatchNorm2d(outs//2),
+            nn.Conv2d(outs // 2, outs // 2, 3, 1, 1),
+            nn.BatchNorm2d(outs // 2),
             nn.ReLU(inplace=True),
-            nn.Conv2d(outs//2,outs,1)
+            nn.Conv2d(outs // 2, outs, 1)
         )
         if ins != outs:
             self.skipConv = nn.Conv2d(ins,outs,1)
@@ -163,8 +164,13 @@ if __name__ == '__main__':
     net = Hourglass(4, 256,  128,  resBlock=Conv)
     print(net)
     dummy_input = torch.randn(1, 256, 128, 128)
+
     y = net(dummy_input)
     print(type(y))
     for i in y:  # type: torch.Tensor
         print(i.size(), type(i))
+
+    y[0][0].sum().backward()
+    y[0][0].sum().backward()
+
 

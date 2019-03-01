@@ -23,7 +23,7 @@ class Heatmapper:
         self.double_sigma2 = 2 * self.sigma * self.sigma
         self.gaussian_thre = config.transform_params.gaussian_thre  # set responses lower than gaussian_thre to 0
         self.gaussian_size = ceil((sqrt(-self.double_sigma2 * log(self.gaussian_thre))) / config.stride) * 2
-        self.offset_radius = self.gaussian_size // 2  # offset vector range
+        self.offset_size = self.gaussian_size // 2 + 1  # offset vector range
         self.thre = config.transform_params.paf_thre
 
         # cached common parameters which same for all iterations and all pictures
@@ -42,7 +42,7 @@ class Heatmapper:
         self.X = self.X + stride / 2 - 0.5
         self.Y = self.Y + stride / 2 - 0.5
 
-    def create_heatmaps(self, joints,  mask_all):  # 看来图像根据每个main person都被处理成了固定的大小尺寸，因此heat map也是固定大小了
+    def create_heatmaps(self, joints,  mask_all):  # 图像根据每个main person都被处理成了固定的大小尺寸，因此heatmap也是固定大小了
         """
         Create keypoint and body part heatmaps
         :param joints: input keypoint coordinates, np.float32 dtype is a very little faster
@@ -52,7 +52,8 @@ class Heatmapper:
         """
         # print(joints.shape)  # 例如(3, 18, 3)，把每个main person作为图片的中心，但是依然可能会包括其他不同的人在这个裁剪后的图像中
         heatmaps = np.zeros(self.config.parts_shape, dtype=np.float32)  # config.parts_shape: 46, 46, 57
-        # 此处的heat map一共有57个channel，包含了heat map以及paf以及背景channel。并且对heat map初始化为0很重要，因为这样使得没有标注的区域是没有值的！
+        # 此处的heat map一共有57个channel，包含了heat map以及paf以及背景channel。
+        # 并且对heat map初始化为0很重要，因为这样使得没有标注的区域是没有值的！
         self.put_joints(heatmaps, joints)
         # sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)
         # python切片函数　class slice(start, stop[, step])
@@ -84,7 +85,7 @@ class Heatmapper:
         # If in same point of answer mask is zero this means "ignore answers in this point while training network"
         # because loss will be zero in this point.
 
-        return heatmaps
+        return heatmaps.transpose((2, 1, 0))  # pytorch need N*C*H*W format
 
     def put_gaussian_maps(self, heatmaps, layer, joints):
         # update: 只计算一定区域内而不是全图像的值来加速GT的生成，参考associate embedding
@@ -221,10 +222,10 @@ class Heatmapper:
 
     def put_offset_vector_maps(self, offset_vectors, mask_offset, layer, joints):
         for i in range(joints.shape[0]):
-            x_min = int(round(joints[i, 0] / self.config.stride) - self.offset_radius // 2)
-            x_max = int(round(joints[i, 0] / self.config.stride) + self.offset_radius // 2 + 1)
-            y_min = int(round(joints[i, 1] / self.config.stride) - self.offset_radius // 2)
-            y_max = int(round(joints[i, 1] / self.config.stride) + self.offset_radius // 2 + 1)
+            x_min = int(round(joints[i, 0] / self.config.stride) - self.offset_size // 2)
+            x_max = int(round(joints[i, 0] / self.config.stride) + self.offset_size // 2 + 1)
+            y_min = int(round(joints[i, 1] / self.config.stride) - self.offset_size // 2)
+            y_max = int(round(joints[i, 1] / self.config.stride) + self.offset_size // 2 + 1)
 
             if y_max < 0:
                 continue
@@ -243,8 +244,11 @@ class Heatmapper:
             slice_x = slice(x_min, x_max)
             slice_y = slice(y_min, y_max)
 
-            offset_x = (self.grid_x[slice_x].astype(np.float32) - joints[i, 0])  # type: np.ndarray # joints[i, 0] -> x
-            offset_y = (self.grid_y[slice_y].astype(np.float32) - joints[i, 1])  # type: np.ndarray # joints[i, 1] -> y
+            # Try: 将offset用log函数编码不合适，因为∆x, ∆y有正有负。可以先将偏差编码到-0.5～0.5，再使用L1 loss
+            # type: np.ndarray # joints[i, 0] -> x
+            offset_x = (self.grid_x[slice_x].astype(np.float32) - joints[i, 0]) / (self.offset_size * self.config.stride)
+            # type: np.ndarray # joints[i, 1] -> y
+            offset_y = (self.grid_y[slice_y].astype(np.float32) - joints[i, 1]) / (self.offset_size * self.config.stride)
             offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
             offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
 
@@ -265,7 +269,7 @@ class Heatmapper:
         offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]
         mask_offset[mask_offset > 0] = 1
 
-        return offset_vectors, mask_offset
+        return offset_vectors.transpose((2, 1, 0)), mask_offset.transpose((2, 1, 0))  # pytorch need N*C*H*W format
 
 
 def gaussian(sigma, x, u):
