@@ -33,7 +33,7 @@ class MultiTaskLoss(nn.Module):
         loss_scales = [self._loss_per_scale(pred_scale_tensors[i], target_tuple) * self.scale_weight[i] for i in
                        range(1)]
         loss_per_batch = sum(loss_scales) / len(self.scale_weight)
-        return loss_per_batch
+        return loss_per_batch / self.batch_size
 
     def _loss_per_scale(self, pred, target):
         """

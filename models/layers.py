@@ -75,7 +75,6 @@ class Hourglass(nn.Module):
         self.hg = self._make_hour_glass()
         self.downsample = nn.MaxPool2d(2, 2)
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
-        self.up_fms = []  # collect feature maps produced by low2 at every scale
 
     def _make_single_residual(self, depth_id):
         # the innermost conve layer, return as an element
@@ -105,7 +104,7 @@ class Hourglass(nn.Module):
             hg.append(nn.ModuleList(res))  # pack conve layers of  every oder of hourglass block
         return nn.ModuleList(hg)
 
-    def _hour_glass_forward(self, depth_id, x):
+    def _hour_glass_forward(self, depth_id, x, up_fms):
         """
         built an hourglass block whose order is depth_id
         :param depth_id: oder number of hourglass block
@@ -118,9 +117,9 @@ class Hourglass(nn.Module):
         if depth_id == (self.depth - 1):  # except for the highest-order hourglass block
             low2 = self.hg[depth_id][3](low1)
         else:
-            low2 = self._hour_glass_forward(depth_id + 1, low1)  # call the lower-order hourglass block recursively
+            low2 = self._hour_glass_forward(depth_id + 1, low1, up_fms)  # call the lower-order hourglass block recursively
         low3 = self.hg[depth_id][2](low2)
-        self.up_fms.append(low2)  # pack the different scales of feature maps
+        up_fms.append(low2)
         # ######################## # if we don't consider 8*8 scale
         # if depth_id < self.depth - 1:
         #     self.up_fms.append(low2)
@@ -129,9 +128,12 @@ class Hourglass(nn.Module):
 
     def forward(self, x):
         """
+        :param: x a input tensor warpped wrapped as a list
         :return: 5 different scales of feature maps, 128*128, 64*64, 32*32, 16*16, 8*8
         """
-        return [self._hour_glass_forward(0, x), self.up_fms[3], self.up_fms[2], self.up_fms[1], self.up_fms[0]]
+        up_fms = []  # collect feature maps produced by low2 at every scale
+        feature_map = self._hour_glass_forward(0, x, up_fms)
+        return [feature_map] + up_fms[::-1]
 
 
 class Hourglass_easy(nn.Module):
@@ -171,6 +173,6 @@ if __name__ == '__main__':
         print(i.size(), type(i))
 
     y[0][0].sum().backward()
-    y[0][0].sum().backward()
+
 
 
