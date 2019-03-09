@@ -10,7 +10,7 @@ def make_dot(var, params=None):
     Args:
         var: output Variable
         params: dict of (name, Variable) to add names to node that
-            require grad (TODO: make optional)
+            require grad (T O D O: make optional)
     """
     # visulize the netwok or drwa the network or show the network
     if params is not None:
@@ -58,7 +58,8 @@ def make_dot(var, params=None):
 if __name__ == '__main__':
 
     # output the shape of of every layers' feature maps
-    from models.layers import Conv, Residual, Hourglass
+    from models.layers import Conv, Residual, Hourglass, SELayer
+    from models.posenet import PoseNet
 
     # ##############################################################3
     # from torchsummary import summary
@@ -87,6 +88,17 @@ if __name__ == '__main__':
     net = Hourglass(4, 256,  128,  resBlock=Conv)
     dummy_input = torch.randn(1, 256, 128, 128)
     torch.onnx.export(net, dummy_input, "hourglass.onnx")
+
+    se = SELayer(256)
+    dummy_input = torch.randn(8, 256, 128, 128)
+    torch.onnx.export(se, dummy_input, "SElayer.onnx")
+
+    pose = PoseNet(4, 256, 34)
+    dummy_input = torch.randn(1, 512, 512, 3)
+    y = pose(dummy_input)
+    torch.onnx.export(pose, dummy_input, "posenet.onnx")  # netron --host=localhost --port=8080
+    torch.onnx.export(pose, dummy_input, "posenet2.onnx")  # export onnx for the second time to check the model
+
 
 
 

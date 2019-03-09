@@ -14,7 +14,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 
-dataset_dir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data/dataset/coco/COCO2017'))
+dataset_dir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data/dataset/coco/link2coco2017'))
 
 tr_anno_path = os.path.join(dataset_dir, "annotations/person_keypoints_train2017.json")  # 只取keypoint的标注信息
 tr_img_dir = os.path.join(dataset_dir, "train2017")
@@ -29,8 +29,8 @@ datasets = [
 ]
 
 
-tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset512_try.h5")
-val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset512_try.h5")
+tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset512.h5")
+val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset512.h5")
 
 val_size = 100  # size of validation set  设置的validation subset的大小.　剩余的val数据将选入train数据中
 image_size = 512  # 用于训练网络时，设定的训练集图片的统一尺寸　

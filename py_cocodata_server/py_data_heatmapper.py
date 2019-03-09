@@ -85,7 +85,7 @@ class Heatmapper:
         # If in same point of answer mask is zero this means "ignore answers in this point while training network"
         # because loss will be zero in this point.
 
-        return heatmaps.transpose((2, 1, 0))  # pytorch need N*C*H*W format
+        return heatmaps.transpose((2, 0, 1))  # pytorch need N*C*H*W format
 
     def put_gaussian_maps(self, heatmaps, layer, joints):
         # update: 只计算一定区域内而不是全图像的值来加速GT的生成，参考associate embedding
@@ -252,7 +252,7 @@ class Heatmapper:
             offset_x_mesh = np.repeat(offset_x.reshape(1, -1), offset_y.shape[0], axis=0)
             offset_y_mesh = np.repeat(offset_y.reshape(-1, 1), offset_x.shape[0], axis=1)
 
-            offset_vectors[slice_y, slice_x, layer * 2] += offset_x_mesh
+            offset_vectors[slice_y, slice_x, layer * 2] += offset_x_mesh  # add up the offsets in the same location
             offset_vectors[slice_y, slice_x, layer * 2 + 1] += offset_y_mesh
             mask_offset[slice_y, slice_x, layer * 2] += 1
             mask_offset[slice_y, slice_x, layer * 2 + 1] += 1
@@ -266,10 +266,10 @@ class Heatmapper:
             visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered !
             self.put_offset_vector_maps(offset_vectors, mask_offset, i, joints[visible, i, 0:2])
 
-        offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]
+        offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]  # average the offsets in the same location
         mask_offset[mask_offset > 0] = 1
 
-        return offset_vectors.transpose((2, 1, 0)), mask_offset.transpose((2, 1, 0))  # pytorch need N*C*H*W format
+        return offset_vectors.transpose((2, 0, 1)), mask_offset.transpose((2, 0, 1))  # pytorch need N*C*H*W format
 
 
 def gaussian(sigma, x, u):

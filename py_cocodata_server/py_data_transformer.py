@@ -134,7 +134,7 @@ class Transformer:
         # plt.imshow(img[:,:,[2,1,0]])  # opencv imread ---> BGR order
         # plt.show()
 
-        # mask也要做一致的变换
+        # mask也要做一致的变换  FIXME: resize插值算法改成三次立方
         mask_miss = cv2.warpAffine(mask_miss, M, (self.config.height, self.config.width), flags=cv2.INTER_LINEAR,
                               borderMode=cv2.BORDER_CONSTANT, borderValue=255)  # cv2.INTER_CUBIC适合放大
 

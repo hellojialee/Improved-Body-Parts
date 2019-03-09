@@ -26,18 +26,20 @@ print('loading the data finish......')
 val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=8,
                         pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
 
-# # for debug
+# # ############# for debug  ###################
 # if __name__ == '__main__':
 #     t0 = time.time()
 #     count = 0
 #     print(torch.cuda.get_device_name(0))
 #     torch.backends.cudnn.benchmark = True
-#     for epoch in range(10):
-#         for bath_id, data_dict in enumerate(val_loader):
+#     for epoch in range(20):
+#         for bath_id, data_dict in enumerate(train_loader):
 #
 #             t = data_dict[0].cuda()  # , non_blocking=True
 #             count += opt.batch_size
 #             print(bath_id, ' of ', epoch)
+#             if count > 500:
+#                 break
 #     print('**************** ', count / (time.time() - t0))
 
 use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用

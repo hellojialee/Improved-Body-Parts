@@ -11,7 +11,7 @@ import cv2
 
 
 class MyDataset(Dataset):
-    def __init__(self, global_config, config, shuffle=True, augment=True):
+    def __init__(self, global_config, config, shuffle=False, augment=True):
         """
         Initialize a DataIterator
         :param global_config: the configuration used in our project
@@ -19,7 +19,6 @@ class MyDataset(Dataset):
         :param shuffle:
         :param augment:
         """
-        self.records = 0
         self.global_config = global_config
         self.config = config
         self.shuffle = shuffle
@@ -28,6 +27,7 @@ class MyDataset(Dataset):
 
     def __getitem__(self, index):
         # return entries: image, mask_miss, unmasked labels, offsets, mask_offset
+        # Notice： numpy.random seed will fork the same value in multi-process, while python random will fork differently
         return self.raw_data_iterator.gen(index)
 
     def __len__(self):
@@ -47,13 +47,13 @@ if __name__ == '__main__':  # for debug
 
             # show the generated ground truth
             if show_image:
-                show_labels = cv2.resize(offsets, image.shape[:2], interpolation=cv2.INTER_CUBIC)
-                mask_offset = cv2.resize(mask_offset, image.shape[:2], interpolation=cv2.INTER_CUBIC)
+                show_labels = cv2.resize(labels.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
+                offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
-                plt.imshow(show_labels[:,:,11], alpha=0.5)  # mask_all
-                # plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
+                # plt.imshow(offsets[:, :, -1], alpha=0.5)  # mask_all
+                plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
                 plt.show()
-        print("%d samples" % batch)
         print("produce %d samples per second: " % (batch / (time() - start)))
 
     config = GetConfig("Canonical")
@@ -61,4 +61,4 @@ if __name__ == '__main__':  # for debug
 
     val_client = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
     # test the data generator
-    test_augmentation_speed(val_client, True)
+    test_augmentation_speed(val_client, False)

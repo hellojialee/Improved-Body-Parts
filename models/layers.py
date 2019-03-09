@@ -5,6 +5,7 @@ import time
 import numpy as np
 import cv2
 import torch
+import torch.nn.functional as F
 
 
 class Residual(nn.Module):
@@ -52,8 +53,8 @@ class Conv(nn.Module):
 
     def forward(self, x):
         # examine the input channel equals the conve kernel channel
-        # assert x.size()[1] == self.inp_dim, \
-        #     "input channel {} dese not fit kernel channel {}".format(x.size()[1], self.inp_dim)
+        assert x.size()[1] == self.inp_dim, "input channel {} dese not fit kernel channel {}".format(x.size()[1],
+                                                                                                     self.inp_dim)
         x = self.conv(x)
         if self.relu is not None:
             x = self.relu(x)
@@ -73,8 +74,8 @@ class Hourglass(nn.Module):
         self.resBlock = resBlock
         # will execute when instantiate the Hourglass object, prepare network's parameters
         self.hg = self._make_hour_glass()
-        self.downsample = nn.MaxPool2d(2, 2)
-        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')
+        self.downsample = nn.MaxPool2d(2, 2)  # no learning parameters, can be used any times repeatedly
+        self.upsample = nn.Upsample(scale_factor=2, mode='nearest')  # no learning parameters
 
     def _make_single_residual(self, depth_id):
         # the innermost conve layer, return as an element
@@ -95,12 +96,12 @@ class Hourglass(nn.Module):
         :return: conve layers packed in n hourglass blocks
         """
         hg = []
-        for d_th in range(self.depth):
+        for i in range(self.depth):
             #  skip path; up_residual_block; down_residual_block_path,
             # 0 ~ n-2 (except the outermost n-1 order) need 3 residual blocks
-            res = self._make_lower_residual(d_th)  # type:list
-            if d_th == (self.depth - 1):  # the deepest path (i.e. the longest path) need 4 residual blocks
-                res.append(self._make_single_residual(d_th))  # list append an element
+            res = self._make_lower_residual(i)  # type:list
+            if i == (self.depth - 1):  # the deepest path (i.e. the longest path) need 4 residual blocks
+                res.append(self._make_single_residual(i))  # list append an element
             hg.append(nn.ModuleList(res))  # pack conve layers of  every oder of hourglass block
         return nn.ModuleList(hg)
 
@@ -117,7 +118,8 @@ class Hourglass(nn.Module):
         if depth_id == (self.depth - 1):  # except for the highest-order hourglass block
             low2 = self.hg[depth_id][3](low1)
         else:
-            low2 = self._hour_glass_forward(depth_id + 1, low1, up_fms)  # call the lower-order hourglass block recursively
+            # call the lower-order hourglass block recursively
+            low2 = self._hour_glass_forward(depth_id + 1, low1, up_fms)
         low3 = self.hg[depth_id][2](low2)
         up_fms.append(low2)
         # ######################## # if we don't consider 8*8 scale
@@ -136,43 +138,40 @@ class Hourglass(nn.Module):
         return [feature_map] + up_fms[::-1]
 
 
-class Hourglass_easy(nn.Module):
-    def __init__(self, n, f, bn=None, increase=128):
-        super(Hourglass_easy, self).__init__()
-        nf = f + increase
-        self.up1 = Conv(f, f, 3, bn=bn)
-        # Lower branch
-        self.pool1 = nn.MaxPool2d(2, 2)
-        self.low1 = Conv(f, nf, 3, bn=bn)
-        # Recursive hourglass
-        if n > 1:
-            self.low2 = Hourglass_easy(n - 1, nf, bn=bn)
-        else:
-            self.low2 = Conv(nf, nf, 3, bn=bn)
-        self.low3 = Conv(nf, f, 3)
-        self.up2 = nn.UpsamplingNearest2d(scale_factor=2)
+class SELayer(nn.Module):
+    def __init__(self, inp_dim, reduction=16):
+        """
+        Squeeze and Excitation
+        :param inp_dim: the channel of input tensor
+        :param reduction: channel compression ratio
+        """
+        assert inp_dim > reduction, "Make sure your input channel bigger than reduction which equals to {}".format(reduction)
+        super(SELayer, self).__init__()
+        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        self.fc = nn.Sequential(
+                nn.Linear(inp_dim, inp_dim // reduction),
+                nn.ReLU(inplace=True),
+                nn.Linear(inp_dim // reduction, inp_dim),
+                nn.Sigmoid())
 
     def forward(self, x):
-        up1 = self.up1(x)
-        pool1 = self.pool1(x)
-        low1 = self.low1(pool1)
-        low2 = self.low2(low1)
-        low3 = self.low3(low2)
-        up2 = self.up2(low3)
-        return up1 + up2
+        b, c, _, _ = x.size()
+        y = self.avg_pool(x).view(b, c)
+        y = self.fc(y).view(b, c, 1, 1)
+        return x * y
+
 
 if __name__ == '__main__':
 
-    net = Hourglass(4, 256,  128,  resBlock=Conv)
-    print(net)
-    dummy_input = torch.randn(1, 256, 128, 128)
+    se = SELayer(256)
+    print(se)
+    dummy_input = torch.randn(8, 256, 128, 128)
+    y = se(dummy_input)
+    print(y.shape)
+    y.sum().backward()
 
-    y = net(dummy_input)
-    print(type(y))
-    for i in y:  # type: torch.Tensor
-        print(i.size(), type(i))
 
-    y[0][0].sum().backward()
+
 
 
 

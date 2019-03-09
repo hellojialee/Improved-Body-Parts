@@ -29,7 +29,7 @@ class RawDataIterator:
         self.augment = augment
         self.shuffle = shuffle
         # datum[0]: <HDF5 group "dataset">, is the annotation file used in our project
-        with h5py.File(self.h5file_path, 'r') as file:
+        with h5py.File(self.h5file_path, 'r', swmr=True) as file:
             self.keys = list(file['dataset'].keys())
 
     def gen(self, index):
@@ -39,7 +39,7 @@ class RawDataIterator:
             random.shuffle(self.keys)  # shuffle the self.keys
 
         if self.datum is None:
-            file = h5py.File(self.h5file_path, 'r')
+            file = h5py.File(self.h5file_path, 'r', swmr=True)
             self.datum = file['datum'] if 'datum' in file \
                 else (file['dataset'], file['images'], file['masks'] if 'masks' in file else None)
 
