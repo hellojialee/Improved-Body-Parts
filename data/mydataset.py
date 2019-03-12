@@ -52,7 +52,7 @@ if __name__ == '__main__':  # for debug
                 mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
                 # plt.imshow(offsets[:, :, -1], alpha=0.5)  # mask_all
-                plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, 28], alpha=0.5)  # mask_all
                 plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))
 
@@ -61,4 +61,4 @@ if __name__ == '__main__':  # for debug
 
     val_client = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
     # test the data generator
-    test_augmentation_speed(val_client, False)
+    test_augmentation_speed(val_client, True)

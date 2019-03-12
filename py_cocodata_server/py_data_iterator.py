@@ -5,20 +5,20 @@ import json
 import numpy as np
 import cv2
 import torch
-from py_data_transformer import Transformer, AugmentSelection
-from py_data_heatmapper import Heatmapper
+from py_cocodata_server.py_data_transformer import Transformer, AugmentSelection
+from py_cocodata_server.py_data_heatmapper import Heatmapper
 from time import time
 import matplotlib.pyplot as plt
 
 
 class RawDataIterator:
     """ The real DataIterator which generates the training materials"""
-    def __init__(self, global_config, config, shuffle=True, augment=True):
+    def __init__(self, global_config, config, shuffle=True, augment=False):
         """
         :param global_config: configuration used in our project
         :param config: original configuration used in COCO database
         :param shuffle:  # fixme: 可以在pytorch的dataloader类中选择内置的shuffle
-        :param augment:
+        :param augment: data augmentation
         """
         self.global_config = global_config
         self.config = config  # self.configs can be a list to hold several separate configs or only one config
@@ -29,7 +29,7 @@ class RawDataIterator:
         self.augment = augment
         self.shuffle = shuffle
         # datum[0]: <HDF5 group "dataset">, is the annotation file used in our project
-        with h5py.File(self.h5file_path, 'r', swmr=True) as file:
+        with h5py.File(self.h5file_path, 'r') as file:
             self.keys = list(file['dataset'].keys())
 
     def gen(self, index):
@@ -39,7 +39,7 @@ class RawDataIterator:
             random.shuffle(self.keys)  # shuffle the self.keys
 
         if self.datum is None:
-            file = h5py.File(self.h5file_path, 'r', swmr=True)
+            file = h5py.File(self.h5file_path, 'r')
             self.datum = file['datum'] if 'datum' in file \
                 else (file['dataset'], file['images'], file['masks'] if 'masks' in file else None)
 
@@ -67,8 +67,8 @@ class RawDataIterator:
         # plt.imshow(image[:, :, [2, 1, 0]])
         # plt.imshow(show_labels[:, :, 10], alpha=0.5)  # mask_all
         # plt.show()
-        return torch.from_numpy(image), torch.from_numpy(mask_miss), torch.from_numpy(labels), torch.from_numpy(
-            offsets), torch.from_numpy(mask_offset)
+        return torch.from_numpy(image), torch.from_numpy(mask_miss[np.newaxis, :, :]), \
+            torch.from_numpy(labels), torch.from_numpy(offsets), torch.from_numpy(mask_offset)
 
     def read_data(self, key):
 

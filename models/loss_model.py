@@ -8,7 +8,7 @@ class MultiTaskLoss(nn.Module):
 
     def __init__(self, opt, config, heatmap_weight=1, offset_weight=1, **kwargs):
         super(MultiTaskLoss, self).__init__()
-        self.nstck = opt.nstack
+        self.nstack = opt.nstack
         self.batch_size = opt.batch_size
         self.offset_start = config.offset_start
         self.multi_task_weight = opt.multi_task_weight

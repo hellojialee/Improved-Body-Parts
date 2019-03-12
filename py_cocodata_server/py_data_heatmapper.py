@@ -23,7 +23,7 @@ class Heatmapper:
         self.double_sigma2 = 2 * self.sigma * self.sigma
         self.gaussian_thre = config.transform_params.gaussian_thre  # set responses lower than gaussian_thre to 0
         self.gaussian_size = ceil((sqrt(-self.double_sigma2 * log(self.gaussian_thre))) / config.stride) * 2
-        self.offset_size = self.gaussian_size // 2 + 1  # offset vector range
+        self.offset_size = self.gaussian_size // 2 + 1  # + 1  # offset vector range
         self.thre = config.transform_params.paf_thre
 
         # cached common parameters which same for all iterations and all pictures
@@ -286,7 +286,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     # 点到两个端点所确定的直线的距离　classic formula is:
     # # d = [(x2-x1)*(y1-y)-(x1-x)*(y2-y1)] / sqrt((x2-x1)**2 + (y2-y1)**2)
     """
-    # parallel calculation distance from any number of points of arbitrary shape(X, Y),
+    # parallel_encoding calculation distance from any number of points of arbitrary shape(X, Y),
     # to line defined by segment (x1,y1) -> (x2, y2)
     xD = (x2 - x1)
     yD = (y2 - y1)

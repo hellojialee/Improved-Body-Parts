@@ -111,7 +111,7 @@ class PoseNet(nn.Module):
                         features_cache[j] = self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
                             features_instack[j])
             pred.append(preds_instack)
-        # returned list shape: [nstack * [128*128, 64*64, 32*32, 16*16, 8*8]]
+        # returned list shape: [nstack * [batch*128*128, batch*64*64, batch*32*32, batch*16*16, batch*8*8]]z
         return pred
 
     def _initialize_weights(self):
