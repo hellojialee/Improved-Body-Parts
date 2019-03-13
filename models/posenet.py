@@ -5,7 +5,7 @@ import math
 import torch
 from torch import nn
 from models.layers import Conv, Hourglass, SELayer
-from models.loss_model_parallel import MultiTaskLoss_parallel
+from models.loss_model_parallel import MultiTaskLossParallel
 
 
 class Merge(nn.Module):
@@ -143,12 +143,19 @@ class Network(torch.nn.Module):
     def __init__(self, opt, config, bn=False):
         super(Network, self).__init__()
         self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
-        self.criterion = MultiTaskLoss_parallel(opt, config)  # Notice! We use parallel loss module here
+        self.criterion = MultiTaskLossParallel(opt, config)  # Notice! We use parallel loss module here
 
     def forward(self, inp_imgs, target_tuple):
+        # Batch will be divided and Parallel Model will call this forward on every GPU
         output_tuple = self.posenet(inp_imgs)
         loss = self.criterion(output_tuple, target_tuple)
-        return loss
+
+        if not self.training:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return output_tuple, loss
+        else:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return loss
 
 
 if __name__ == '__main__':

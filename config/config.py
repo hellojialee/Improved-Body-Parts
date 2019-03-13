@@ -23,7 +23,7 @@ class TransformationParams:
         #  TODO: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
         #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
         self.target_dist = 0.6
-        self.scale_prob = 0.5  # scale probability, 0: never scale, 1: always scale
+        self.scale_prob = 0.7  # scale probability, 0: never scale, 1: always scale
         self.scale_min = 0.8
         self.scale_max = 1.2
         self.max_rotate_degree = 40.  # todo: 看看hourglass中512设置的偏移
@@ -51,7 +51,8 @@ class CanonicalConfig:
                       "Lhip", "Lkne", "Lank", "Reye", "Leye", "Rear", "Lear"]  # , "navel"
         self.num_parts = len(self.parts)
         self.parts_dict = dict(zip(self.parts, range(self.num_parts)))
-        self.parts += ["background"]  # 把背景类放最后，便于处理
+        self.parts += ["background"]  # person mask作为背景之一, global config index: 42
+        self.parts += ['reverseKeypoint']  # 对所有keypoints取反作为背景二, global config index: 43
         self.num_parts_with_background = len(self.parts)
         self.leftParts, self.rightParts = CanonicalConfig.ltr_parts(self.parts_dict)
 
@@ -76,11 +77,12 @@ class CanonicalConfig:
 
         self.paf_layers = len(self.limbs_conn)
         self.heat_layers = self.num_parts
-        self.num_layers = self.paf_layers + self.heat_layers + 1  # layers of keypoint and body part heatmaps
+        # layers of keypoint and body part heatmaps PLUS ++ 2 background
+        self.num_layers = self.paf_layers + self.heat_layers + 2
 
         self.paf_start = 0
         self.heat_start = self.paf_layers  # Notice: 此处channel安排上，paf_map在前，heat_map在后
-        self.bkg_start = self.paf_layers + self.heat_layers  # 用于feature map的计数
+        self.bkg_start = self.paf_layers + self.heat_layers  # 用于feature map的计数,2个background的起始点
 
         self.offset_layers = 2 * self.num_parts
         self.offset_start = self.num_layers
@@ -93,7 +95,8 @@ class CanonicalConfig:
 
     @staticmethod  # staticmethod修饰的方法定义与普通函数是一样的, staticmethod支持类对象或者实例对方法的调用,即可使用A.f()或者a.f()
     def ltr_parts(parts_dict):
-        # when we flip image left parts became right parts and vice versa. This is the list of parts to exchange each other.
+        # When we flip image left parts became right parts and vice versa.
+        # This is the list of parts to exchange each other.
         leftParts = [parts_dict[p] for p in ["Lsho", "Lelb", "Lwri", "Lhip", "Lkne", "Lank", "Leye", "Lear"]]
         rightParts = [parts_dict[p] for p in ["Rsho", "Relb", "Rwri", "Rhip", "Rkne", "Rank", "Reye", "Rear"]]
         return leftParts, rightParts

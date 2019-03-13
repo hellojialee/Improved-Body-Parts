@@ -53,13 +53,13 @@ class MultiTaskLossParallel(nn.Module):
         #   F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
 
         # ############# For debug ##############################
-        # heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
-        # offset = gt_mask_offsets[0,...].cpu().numpy().squeeze()
-        #
-        # import matplotlib.pylab as plt
-        # # plt.imshow(heatmap[11,:,:]) # mask_all
-        # plt.imshow(offset[2, :,:])  # mask_all
-        # plt.show()
+        heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
+        offset = gt_mask_offsets[0,...].cpu().numpy().squeeze()
+
+        import matplotlib.pylab as plt
+        # plt.imshow(heatmap[11,:,:]) # mask_all
+        plt.imshow(heatmap[43, :,:])  # mask_all
+        plt.show()
         # #####################################################
         heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
                                           , nstack_weight=self.nstack_weight)

@@ -17,6 +17,7 @@ import warnings
 
 os.environ['CUDA_VISIBLE_DEVICES'] = "0, 1, 2, 3"  # choose the available GPUs
 warnings.filterwarnings("ignore")
+torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
@@ -28,12 +29,12 @@ opt = TrainingOpt()
 config = GetConfig(opt.config_name)
 soureconfig = COCOSourceConfig(opt.hdf5_train_data)
 train_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
-train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=32,
+train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=16,
                           pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
 
 soureconfig_val = COCOSourceConfig(opt.hdf5_val_data)
 val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=True)  # shuffle in data loader
-val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=0,
+val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=16,
                         pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
 
 # # ############# for debug  ###################
@@ -48,7 +49,7 @@ val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_
 #             t = data_dict[0].cuda(non_blocking=True)  # , non_blocking=True
 #             count += opt.batch_size
 #             print(bath_id, ' of ', epoch)
-#             if count > 500:
+#             if count > 50:
 #                 break
 #     print('**************** ', count / (time.time() - t0))
 
@@ -63,16 +64,18 @@ if args.resume:
     print('Resuming from checkpoint ...... ')
     checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
 
+    # # #################################################
     # from collections import OrderedDict
-    #
     # new_state_dict = OrderedDict()
     # for k, v in checkpoint['weights'].items():
-    #     name = 'posenet.' + k  # add prefix `posenet.`
+    #     if 'out' in k or 'merge' in k:
+    #         continue
+    #     name = k  # add prefix `posenet.`
     #     new_state_dict[name] = v
-    # load params
-    # posenet.load_state_dict(new_state_dict)
+    # posenet.load_state_dict(new_state_dict, strict=False)
+    # # #################################################
 
-    posenet.load_state_dict(checkpoint['weights'])
+    posenet.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
     print('Network weights have been resumed from checkpoint...')
 
     optimizer.load_state_dict(checkpoint['optimizer_weight'])
@@ -103,7 +106,6 @@ for i in range(start_epoch):
     #  update the learning rate for start_epoch times
     scheduler.step()
 
-
 for param in posenet.parameters():
     if param.requires_grad:
         print('Parameters of network: Autograd')
@@ -115,7 +117,7 @@ def train(epoch):
     posenet.train()
     train_loss = 0
     scheduler.step()
-    print('\nLearning rate at this epoch is: %0.9f' % scheduler.get_lr()[0])
+    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
 
     for batch_idx, target_tuple in enumerate(train_loader):
         # images.requires_grad_()
@@ -132,7 +134,7 @@ def train(epoch):
 
         optimizer.zero_grad()  # zero the gradient buff
 
-        loss_ngpu = posenet(images, target_tuple[1:])
+        loss_ngpu = posenet(images, target_tuple[1:])  # reduce losses of all GPUs on cuda 0
         loss = torch.sum(loss_ngpu) / opt.batch_size
         # print(loc_preds.requires_grad)
         # print(conf_preds.requires_grad)
@@ -164,11 +166,12 @@ def train(epoch):
         logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
         logger.write('\ntrain_loss of epoch {} : {}'.format(epoch, train_loss))
         logger.flush()
+        logger.close()
         torch.save(state, './' + checkpoint_path + '/PoseNet_' + str(epoch) + '_epoch.pth')
         best_loss = train_loss
 
 
-def test(epoch):
+def test(epoch, show_image=False):
     print('\nTest phase, Epoch: {}'.format(epoch))
     posenet.eval()
     with torch.no_grad():  # will save gpu memory and speed up
@@ -186,19 +189,32 @@ def test(epoch):
             # loc_targets = Variable(loc_targets)
             # conf_targets = Variable(conf_targets)
 
-            loss_ngpu = posenet(images, target_tuple[1:])
+            output_tuple, loss_ngpu = posenet(images, target_tuple[1:])
             loss = torch.sum(loss_ngpu) / opt.batch_size
 
             test_loss += loss.item()  # 累加的loss
             print('  Test loss : %.3f, accumulated average loss: %.3f' % (loss.item(), test_loss / (batch_idx + 1)))
+            if show_image:
+                image, mask_miss, labels, offsets, mask_offset = [v.cpu().numpy() for v in target_tuple]
+                output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
+                # show the generated ground truth
+                img = image[0]
+                output = output[0].transpose((1, 2, 0))
+                img = cv2.resize(img, output.shape[:2], interpolation=cv2.INTER_CUBIC)
+                plt.imshow(img[:, :, [2, 1, 0]])  # Opencv image format: BGR
+                plt.imshow(output[:, :, 43], alpha=0.5)  # mask_all
+                # plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
+                plt.show()
+
     os.makedirs(checkpoint_path, exist_ok=True)
     logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
-    logger.write('\nval_loss of epoch {} : {}'.format(epoch, test_loss))
+    logger.write('\nval_loss of epoch {} : {}'.format(epoch, test_loss / len(val_loader)))
     logger.flush()
+    logger.close()
 
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
         train(epoch)
-        test(epoch)
+        test(epoch, show_image=False)
 

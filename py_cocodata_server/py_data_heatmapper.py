@@ -65,10 +65,14 @@ class Heatmapper:
 
         self.put_limbs(heatmaps, joints)
 
-        # add foreground (mask_all) channel
+        # add foreground (mask_all) channel, i.e., the person segmentation mask
         kernel = np.ones((3, 3), np.uint8)
         mask_all = cv2.erode(mask_all, kernel)  # crop the boundary of mask_all
         heatmaps[:, :, self.config.bkg_start] = mask_all
+
+        # add reverse keypoint gaussian heat map on the second background channel
+        sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)  # consider all real joints
+        heatmaps[:, :, self.config.bkg_start + 1] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
 
         # 重要！不要忘了将生成的groundtruth heatmap乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
         # 并且，背景的mask_all没有乘以mask_miss，训练时只是对没有关键点标注的heatmap区域mask掉不做监督，而不需要对输入图片mask!
