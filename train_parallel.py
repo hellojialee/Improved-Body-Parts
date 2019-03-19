@@ -22,6 +22,9 @@ torch.cuda.empty_cache()
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
+parser.add_argument('--max_grad_norm', default=5, type=float,
+    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
+
 args = parser.parse_args()
 
 checkpoint_path = args.checkpoint_path
@@ -57,7 +60,7 @@ use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
 
-posenet = Network(opt, config)
+posenet = Network(opt, config, dist=False)
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate, momentum=0.9, weight_decay=1e-4)
 
 if args.resume:
@@ -101,7 +104,7 @@ if use_cuda:
     torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
     # torch.backends.cudnn.deterministic = True
 
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.2, last_epoch=-1)     # 设置学习率下降策略
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1, last_epoch=-1)     # 设置学习率下降策略
 for i in range(start_epoch):
     #  update the learning rate for start_epoch times
     scheduler.step()
@@ -140,9 +143,11 @@ def train(epoch):
         # print(conf_preds.requires_grad)
         if loss.item() > 1e6:
             print("\nLoss is abnormal, drop this batch !")
+            loss.zero_()
             continue
         # print(loss.requires_grad)
         loss.backward()  # retain_graph=True
+        torch.nn.utils.clip_grad_norm(posenet.parameters(), args.max_grad_norm)
         optimizer.step()  # TODO：可以使用累加的loss变相增大batch size，但对于bn层需要减少默认的momentum
 
         train_loss += loss.item()  # 累加的loss !
@@ -153,8 +158,15 @@ def train(epoch):
 
     global best_loss
     train_loss /= len(train_loader)
+
+    os.makedirs(checkpoint_path, exist_ok=True)
+    logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
+    logger.write('\ntrain_loss of epoch {} : {}'.format(epoch, train_loss))
+    logger.flush()
+    logger.close()
     if train_loss < best_loss:
-        print('saving...')
+        best_loss = train_loss
+        print('=====> Saving checkpoint...')
         state = {
             # not posenet.state_dict(). then, we don't ge the "module" string to begin with
             'weights': posenet.module.state_dict(),
@@ -162,13 +174,7 @@ def train(epoch):
             'train_loss': train_loss,
             'epoch': epoch,
         }
-        os.makedirs(checkpoint_path, exist_ok=True)
-        logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
-        logger.write('\ntrain_loss of epoch {} : {}'.format(epoch, train_loss))
-        logger.flush()
-        logger.close()
         torch.save(state, './' + checkpoint_path + '/PoseNet_' + str(epoch) + '_epoch.pth')
-        best_loss = train_loss
 
 
 def test(epoch, show_image=False):
@@ -202,7 +208,7 @@ def test(epoch, show_image=False):
                 output = output[0].transpose((1, 2, 0))
                 img = cv2.resize(img, output.shape[:2], interpolation=cv2.INTER_CUBIC)
                 plt.imshow(img[:, :, [2, 1, 0]])  # Opencv image format: BGR
-                plt.imshow(output[:, :, 43], alpha=0.5)  # mask_all
+                plt.imshow(output[:, :, 1], alpha=0.5)  # mask_all
                 # plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
                 plt.show()
 
@@ -215,6 +221,6 @@ def test(epoch, show_image=False):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
-        train(epoch)
-        test(epoch, show_image=False)
+        # train(epoch)
+        test(epoch, show_image=True)
 

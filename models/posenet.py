@@ -6,6 +6,7 @@ import torch
 from torch import nn
 from models.layers import Conv, Hourglass, SELayer
 from models.loss_model_parallel import MultiTaskLossParallel
+from models.loss_model import MultiTaskLoss
 
 
 class Merge(nn.Module):
@@ -140,10 +141,12 @@ class Network(torch.nn.Module):
     """
     Wrap the network module as well as the loss module on all GPUs to balance the computation among GPUs.
     """
-    def __init__(self, opt, config, bn=False):
+    def __init__(self, opt, config, bn=False, dist=False):
         super(Network, self).__init__()
         self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
-        self.criterion = MultiTaskLossParallel(opt, config)  # Notice! We use parallel loss module here
+        # If we use train_parallel, we implement the parallel loss . And if we use train_distributed,
+        # we should use single process loss because each process on these 4 GPUs  is independent
+        self.criterion = MultiTaskLoss(opt, config) if dist else MultiTaskLossParallel(opt, config)
 
     def forward(self, inp_imgs, target_tuple):
         # Batch will be divided and Parallel Model will call this forward on every GPU
@@ -156,6 +159,26 @@ class Network(torch.nn.Module):
         else:
             # output will be concatenated  along batch channel automatically after the parallel model return
             return loss
+
+
+class NetworkEval(torch.nn.Module):
+    """
+    Wrap the network module as well as the loss module on all GPUs to balance the computation among GPUs.
+    """
+    def __init__(self, opt, config, bn=False):
+        super(NetworkEval, self).__init__()
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
+
+    def forward(self, inp_imgs):
+        # Batch will be divided and Parallel Model will call this forward on every GPU
+        output_tuple = self.posenet(inp_imgs)
+
+        if not self.training:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return output_tuple
+        else:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            raise ValueError('\nOnly eval mode is available!!')
 
 
 if __name__ == '__main__':

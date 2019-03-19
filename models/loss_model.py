@@ -28,7 +28,7 @@ class MultiTaskLoss(nn.Module):
         """
         # we use 4 stacks, 5 scales
         # TODO: 是用5个不同scale好还是4个scale监督好？
-        assert self.batch_size == target_tuple[0].shape[0], 'batch size {} not match'.format(pred_tuple[0].shape[0])
+        # assert self.batch_size == target_tuple[0].shape[0], 'batch size {} not match'.format(pred_tuple[0].shape[0])
         pred_scale_tensors = [torch.cat([pred_tuple[j][i][None, ...] for j in range(self.nstack)], dim=0) for i in
                               range(5)]  # concatenate the same scale output of different stacks
         # different scale losses have different order of magnitudes owning to different pixel numbers (feature map size)
@@ -51,8 +51,8 @@ class MultiTaskLoss(nn.Module):
         gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])
         gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_misses = F.interpolate(target[0], size=pred.shape[-2:], mode='bilinear')
-        gt_mask_offsets = F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
-        # F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
+        gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
+        # gt_mask_offsets = F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
 
         # ############# For debug ##############################
         # heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
@@ -81,8 +81,8 @@ class MultiTaskLoss(nn.Module):
         :param gamma: focusing parameter
         :return: a scalar tensor
         """
-        eps = 1e-8  # 1e-12
-        s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
+        # eps = 1e-8  # 1e-12
+        # s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
         st = torch.where(torch.ge(sxing, 0.01), s, 1 - s)
         factor = (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
@@ -90,7 +90,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
+        # print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss
@@ -109,7 +109,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        print(' offset L1 loss per stack >>>>>>>>  ', loss_nstack.detach().cpu().numpy())
+        # print(' offset L1 loss per stack >>>>>>>>  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss
@@ -128,7 +128,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
+        # print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss

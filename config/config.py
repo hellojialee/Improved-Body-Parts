@@ -4,8 +4,8 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 10
-    learning_rate = 1e-4
+    batch_size = 10  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    learning_rate = 3e-4  # for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"
     hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset512.h5"

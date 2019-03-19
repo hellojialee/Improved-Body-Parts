@@ -19,10 +19,11 @@ class MultiTaskLossParallel(nn.Module):
     def forward(self, pred_tuple, target_tuple):
         """
         Compute the multi-task total loss
-        :param pred_tuple: [nstack * [(bacth,C,128,128), (bacth,C,64,64), (bacth,C,32,32),  (bacth,C,16,16)], (bacth,C,8,8)]
+        :param pred_tuple: [nstack * [(bacth,C,128,128), (bacth,C,64,64), (bacth,C,32,32),
+        (bacth,C,16,16)], (bacth,C,8,8)]
         :param target_tuple: target tensors, i.e.,
          mask_misses,   heatmaps,       offsets,       mask_offsets,
-        [batch,1,128,128], [batch,43,128,128], [batch,36,128,128], [batch,36,128,128]
+        [batch,1,128,128], [batch,44,128,128], [batch,36,128,128], [batch,36,128,128]
         :return: scalar tensor
         """
         # we use 4 stacks, 5 scales
@@ -46,20 +47,21 @@ class MultiTaskLossParallel(nn.Module):
         pred_heatmap = pred[:, :, :self.offset_start]
         pred_offset = pred[:, :, self.offset_start:]
 
-        gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])
-        gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_misses = F.interpolate(target[0], size=pred.shape[-2:], mode='bilinear')
+        gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])
+
+        gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
         #   F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
 
         # ############# For debug ##############################
-        heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
-        offset = gt_mask_offsets[0,...].cpu().numpy().squeeze()
-
-        import matplotlib.pylab as plt
-        # plt.imshow(heatmap[11,:,:]) # mask_all
-        plt.imshow(heatmap[43, :,:])  # mask_all
-        plt.show()
+        # heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
+        # offset = gt_mask_offsets[0,...].cpu().numpy().squeeze()
+        #
+        # import matplotlib.pylab as plt
+        # # plt.imshow(heatmap[11,:,:]) # mask_all
+        # plt.imshow(heatmap[43, :,:])  # mask_all
+        # plt.show()
         # #####################################################
         heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
                                           , nstack_weight=self.nstack_weight)
@@ -75,12 +77,12 @@ class MultiTaskLossParallel(nn.Module):
         Compute the focal L2 loss between predicted and groundtruth score maps.
         :param s:  predicted tensor (nstack, batch, channel, height, width), predicted score maps
         :param sxing: target tensor (nstack, batch, channel, height, width)
-        :param mask_miss: tensor (nstack, batch, 1, height, width)
+        :param mask_miss: tensor (1, batch, 1, height, width)
         :param gamma: focusing parameter
         :return: a scalar tensor
         """
-        eps = 1e-8  # 1e-12
-        s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
+        # eps = 1e-8  # 1e-12
+        # s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
         st = torch.where(torch.ge(sxing, 0.01), s, 1 - s)
         factor = (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
@@ -96,7 +98,7 @@ class MultiTaskLossParallel(nn.Module):
     @staticmethod
     def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):
         """
-        Compute the smooth L1 loss of offset feature maps
+        Compute the  L1 loss of offset feature maps
         :param pred: predicted tensor (nstack, batch, channel, height, width), predicted feature maps
         :param target: target tensor (nstack, batch, channel, height, width)
         :param mask_offset: tensor (nstack, batch, channel, height, width)
@@ -122,6 +124,8 @@ class MultiTaskLossParallel(nn.Module):
         :return: a scalar tensor
         """
         # multiplied by mask_miss via broadcast operation
+        # eps = 1e-8  # 1e-12  # FIXME
+        # s = torch.clamp(s, eps, 1 - eps)
         out = (s - sxing) ** 2 * mask_miss  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
