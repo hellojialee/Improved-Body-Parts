@@ -60,7 +60,7 @@ class PoseNet(nn.Module):
         self.features = nn.ModuleList([Features(inp_dim, increase=increase, bn=bn) for _ in range(nstack)])
         # predict 5 different scales of heatmpas per stack, keep in mind to pack the list using ModuleList.
         # Notice: nn.ModuleList can only identify Module subclass! Thus, we must pack the inner layers in ModuleList.
-        self.outs = nn.ModuleList(
+        self.outs = nn.ModuleList(   # TODO: out回归换成3×3卷积
             [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 1, relu=False, bn=False) for j in range(5)]) for i in
              range(nstack)])
         self.channel_attention = nn.ModuleList(
@@ -88,14 +88,14 @@ class PoseNet(nn.Module):
 
             if i == 0:  # cache for smaller feature maps produced by hourglass block
                 features_cache = [torch.zeros_like(hourglass_feature[scale]) for scale in range(5)]
-                for s in range(5):  # channel attention before heatmap regression
-                    hourglass_feature[s] = self.channel_attention[i][s](hourglass_feature[s])
+                # for s in range(5):  # channel attention before heatmap regression
+                #     hourglass_feature[s] = self.channel_attention[i][s](hourglass_feature[s])
             else:  # residual connection across stacks
                 for k in range(5):
                     #  python里面的+=, ，*=也是in-place operation,需要注意
-                    hourglass_feature_attention = self.channel_attention[i][k](hourglass_feature[k])
+                    # hourglass_feature_attention = self.channel_attention[i][k](hourglass_feature[k])
 
-                    hourglass_feature[k] = hourglass_feature_attention + features_cache[k]
+                    hourglass_feature[k] = hourglass_feature[k] + features_cache[k]
             # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 

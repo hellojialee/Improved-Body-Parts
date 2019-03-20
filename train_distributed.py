@@ -15,11 +15,10 @@ from models.posenet import Network
 from models.loss_model import MultiTaskLoss
 import warnings
 
-
 try:
     from apex.parallel import DistributedDataParallel as DDP
     from apex.fp16_utils import *
-    from apex import amp, optimizers
+    from apex import amp
     from apex.multi_tensor_apply import multi_tensor_applier
 except ImportError:
     raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
@@ -28,7 +27,7 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
@@ -169,9 +168,9 @@ if args.distributed:
 
 # 创建数据加载器，在训练和验证步骤中喂数据
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=opt.batch_size, shuffle=(train_sampler is None),
-                                           num_workers=16, pin_memory=True, sampler=train_sampler)
+                                           num_workers=16, pin_memory=True, sampler=train_sampler, drop_last=True)
 val_loader = torch.utils.data.DataLoader(val_data, batch_size=opt.batch_size, shuffle=False,
-                                         num_workers=16, pin_memory=True, sampler=val_sampler)
+                                         num_workers=4, pin_memory=True, sampler=val_sampler, drop_last=True)
 
 for param in model.parameters():
     if param.requires_grad:
@@ -265,7 +264,7 @@ def train(epoch):
         # Write the log file each epoch.
         os.makedirs(checkpoint_path, exist_ok=True)
         logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
-        logger.write('\ntrain_loss of epoch {} : {}'.format(epoch, losses.avg))  # validation时不要\n换行
+        logger.write('\nEpoch {}\ttrain_loss: {}'.format(epoch, losses.avg))  # validation时不要\n换行
         logger.flush()
         logger.close()
 
@@ -284,12 +283,58 @@ def train(epoch):
 
 
 def test(epoch):
-    print('\n ############################# Train phase, Epoch: {} #############################'.format(epoch))
+    print('\n ############################# Test phase, Epoch: {} #############################'.format(epoch))
     posenet.eval()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     if args.distributed:
         train_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
-    pass
+    batch_time = AverageMeter()
+    losses = AverageMeter()
+    end = time.time()
+
+    for batch_idx, target_tuple in enumerate(val_loader):
+        # images.requires_grad_()
+        # loc_targets.requires_grad_()
+        # conf_targets.requires_grad_()
+        if use_cuda:
+            #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
+            target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
+
+        # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
+        images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+
+        with torch.no_grad():
+            _, loss = model(images, target_tuple[1:])
+
+        if args.distributed:
+            # We manually reduce and average the metrics across processes. In-place reduce tensor.
+            reduced_loss = reduce_tensor(loss.data)
+        else:
+            reduced_loss = loss.data
+
+        # to_python_float incurs a host<->device sync
+        losses.update(to_python_float(reduced_loss), images.size(0))  # update needs average and number
+        torch.cuda.synchronize()  # 因为所有GPU操作是异步的，应等待当前设备上所有流中的所有核心完成，测试的时间才正确
+        batch_time.update((time.time() - end))
+        end = time.time()
+
+        if args.local_rank == 0:  # Print them in the Process 0
+            print('==================>Test: [{0}/{1}]\t'
+                  'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+                  'Speed {2:.3f} ({3:.3f})\t'
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
+                   batch_idx, len(val_loader),
+                   args.world_size * opt.batch_size / batch_time.val,
+                   args.world_size * opt.batch_size / batch_time.avg,
+                   batch_time=batch_time, loss=losses))
+
+    if args.local_rank == 0:  # Print them in the Process 0
+        # Write the log file each epoch.
+        os.makedirs(checkpoint_path, exist_ok=True)
+        logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
+        logger.write('\tval_loss: {}'.format(losses.avg))  # validation时不要\n换行
+        logger.flush()
+        logger.close()
 
 
 def adjust_learning_rate(optimizer, epoch, step, len_epoch):
@@ -328,6 +373,12 @@ class AverageMeter(object):
 
 
 def reduce_tensor(tensor):
+    # Reduces the tensor data across all machines
+    # If we print the tensor, we can get:
+    # tensor(334.4330, device='cuda:1') *********************, here is cuda:  cuda:1
+    # tensor(359.1895, device='cuda:3') *********************, here is cuda:  cuda:3
+    # tensor(263.3543, device='cuda:2') *********************, here is cuda:  cuda:2
+    # tensor(340.1970, device='cuda:0') *********************, here is cuda:  cuda:0
     rt = tensor.clone()  # The function operates in-place.
     dist.all_reduce(rt, op=dist.reduce_op.SUM)
     rt /= args.world_size
@@ -337,4 +388,5 @@ def reduce_tensor(tensor):
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
         train(epoch)
+        test(epoch)
 

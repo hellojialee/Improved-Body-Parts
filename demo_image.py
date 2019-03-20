@@ -7,6 +7,7 @@ import tqdm
 import time
 import cv2
 import torch
+import torch.optim as optim
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from utils.config_reader import config_reader
@@ -46,8 +47,12 @@ parser.add_argument('--resume', '-r', action='store_true', default=True, help='r
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/coco4.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/cocotry2.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
+
+parser.add_argument('--opt-level', type=str, default='O1')
+parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
+parser.add_argument('--loss-scale', type=str, default=None)
 
 args = parser.parse_args()
 
@@ -105,7 +110,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
         input_img = np.float32(imageToTest_padded[None, ...] / 255)
         input_img = torch.from_numpy(input_img).cuda()
-
+        # output tensor dtype: float 16
         output_tuple = posenet(input_img)
 
         output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
@@ -523,7 +528,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
             cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
             canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
-
     return canvas
 
 
@@ -535,12 +539,35 @@ if __name__ == '__main__':
 
     print('Resuming from checkpoint ...... ')
     checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
+
+    # #################################################
+    # from collections import OrderedDict
+    #
+    # new_state_dict = OrderedDict()
+    # for k, v in checkpoint['weights'].items():
+    #     # if 'out' in k or 'merge' in k:
+    #     #     continue
+    #     name = 'module.' + k  # add prefix 'module.'
+    #     new_state_dict[name] = v
+    # posenet.load_state_dict(new_state_dict)  # , strict=False
+    # # #################################################
+
+    checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
     posenet.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
     print('Network weights have been resumed from checkpoint...')
 
     if torch.cuda.is_available():
         posenet.cuda()
     posenet.eval()   # set eval mode is important
+
+    from apex import amp
+
+    optimizer = optim.Adam(posenet.parameters())  # Redundant.
+
+    posenet, optimizer = amp.initialize(posenet, optimizer,
+                                        opt_level=args.opt_level,
+                                        keep_batchnorm_fp32=args.keep_batchnorm_fp32,
+                                        loss_scale=args.loss_scale)
 
     tic = time.time()
     print('start processing...')
@@ -549,7 +576,7 @@ if __name__ == '__main__':
     tic = time.time()
     # generate image with body parts
     with torch.no_grad():
-        canvas = process(input_image, params, model_params, config.heat_layers+2, config.paf_layers)  # fixme: background + 1
+        canvas = process(input_image, params, model_params, config.heat_layers+2, config.paf_layers)  # background + 2
 
     toc = time.time()
     print('processing time is %.5f' % (toc - tic))

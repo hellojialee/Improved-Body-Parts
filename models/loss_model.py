@@ -34,8 +34,8 @@ class MultiTaskLoss(nn.Module):
         # different scale losses have different order of magnitudes owning to different pixel numbers (feature map size)
         loss_scales = [self._loss_per_scale(pred_scale_tensors[i], target_tuple) * self.scale_weight[i] for i in
                        range(5)]
-        loss_per_batch = sum(loss_scales) / sum(self.scale_weight)
-        return loss_per_batch / self.batch_size
+        loss_per_batch = sum(loss_scales) / sum(self.scale_weight) / self.batch_size
+        return loss_per_batch
 
     def _loss_per_scale(self, pred, target):
         """
@@ -90,13 +90,13 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        # print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
+        print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss
 
     @staticmethod
-    def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):
+    def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):   # TODO: smooth L1 loss
         """
         Compute the smooth L1 loss of offset feature maps
         :param pred: predicted tensor (nstack, batch, channel, height, width), predicted feature maps
@@ -109,7 +109,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        # print(' offset L1 loss per stack >>>>>>>>  ', loss_nstack.detach().cpu().numpy())
+        print(' offset L1 loss per stack >>>>>>>>  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss
@@ -128,7 +128,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         loss_nstack = out.sum(dim=(1, 2, 3, 4))
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
-        # print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
+        print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
         return loss

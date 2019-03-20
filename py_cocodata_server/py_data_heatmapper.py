@@ -271,7 +271,7 @@ class Heatmapper:
             self.put_offset_vector_maps(offset_vectors, mask_offset, i, joints[visible, i, 0:2])
 
         offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]  # average the offsets in the same location
-        mask_offset[mask_offset > 0] = 1
+        mask_offset[mask_offset > 0] = 1  # reset the offset mask area
 
         return offset_vectors.transpose((2, 0, 1)), mask_offset.transpose((2, 0, 1))  # pytorch need N*C*H*W format
 

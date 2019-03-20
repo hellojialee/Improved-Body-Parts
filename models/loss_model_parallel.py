@@ -87,8 +87,8 @@ class MultiTaskLossParallel(nn.Module):
         factor = (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
         out = (s - sxing) ** 2 * factor * mask_miss  # type: torch.Tensor
-        # sum over the feature map, should divide by batch afterwards
-        loss_nstack = out.sum(dim=(1, 2, 3, 4))
+        # sum over the feature map, should divide by batch_size afterwards
+        loss_nstack = out.sum(dim=(1, 2, 3, 4))   # losses from nstack 1, 2, 3, 4...
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
@@ -111,7 +111,7 @@ class MultiTaskLossParallel(nn.Module):
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' offset L1 loss per stack >>>>>>>>  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
-        loss = sum(weight_loss) / sum(nstack_weight)
+        loss = sum(weight_loss) / sum(nstack_weight)  # normalized loss by weights
         return loss
 
     @staticmethod

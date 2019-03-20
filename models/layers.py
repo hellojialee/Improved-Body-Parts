@@ -16,7 +16,7 @@ class Residual(nn.Module):
         self.convBlock = nn.Sequential(
             nn.BatchNorm2d(ins),
             nn.ReLU(inplace=True),
-            nn.Conv2d(ins,outs//2,1),
+            nn.Conv2d(ins, outs//2,1),
             nn.BatchNorm2d(outs//2),
             nn.ReLU(inplace=True),
             nn.Conv2d(outs // 2, outs // 2, 3, 1, 1),
@@ -144,6 +144,7 @@ class SELayer(nn.Module):
         Squeeze and Excitation
         :param inp_dim: the channel of input tensor
         :param reduction: channel compression ratio
+        :return output the tensor with the same shape of input
         """
         assert inp_dim > reduction, "Make sure your input channel bigger than reduction which equals to {}".format(reduction)
         super(SELayer, self).__init__()
@@ -160,15 +161,18 @@ class SELayer(nn.Module):
         y = self.fc(y).view(b, c, 1, 1)
         return x * y
 
+    # def forward(self, x):  # 去掉Selayer
+    #     return x
+
 
 if __name__ == '__main__':
 
     se = SELayer(256)
     print(se)
     dummy_input = torch.randn(8, 256, 128, 128)
-    y = se(dummy_input)
-    print(y.shape)
-    y.sum().backward()
+    out = se(dummy_input)
+    print(out.shape)
+    out.sum().backward()
 
 
 
