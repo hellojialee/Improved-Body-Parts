@@ -88,28 +88,32 @@ class PoseNet(nn.Module):
 
             if i == 0:  # cache for smaller feature maps produced by hourglass block
                 features_cache = [torch.zeros_like(hourglass_feature[scale]) for scale in range(5)]
+                # #################################################3
                 # for s in range(5):  # channel attention before heatmap regression
                 #     hourglass_feature[s] = self.channel_attention[i][s](hourglass_feature[s])
             else:  # residual connection across stacks
                 for k in range(5):
                     #  python里面的+=, ，*=也是in-place operation,需要注意
+                    # #################################################3
                     # hourglass_feature_attention = self.channel_attention[i][k](hourglass_feature[k])
-
+                    # hourglass_feature[k] = hourglass_feature_attention + features_cache[k]
                     hourglass_feature[k] = hourglass_feature[k] + features_cache[k]
             # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 
             for j in range(5):  # handle 5 scales of heatmaps
+                features_instack[j] = self.channel_attention[i][j](features_instack[j])  # todo added here
                 preds_instack.append(self.outs[i][j](features_instack[j]))
                 if i != self.nstack - 1:
                     if j == 0:
+                        # reset the hourglass input and the main scale res caches
                         x = x + self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
                             features_instack[j])  # input tensor for next stack
                         features_cache[j] = self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
                             features_instack[j])
 
                     else:
-                        # reset the res caches
+                        # reset the smaller scale res caches only
                         features_cache[j] = self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
                             features_instack[j])
             pred.append(preds_instack)
