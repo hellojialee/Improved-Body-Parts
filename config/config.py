@@ -44,11 +44,11 @@ class TransformationParams:
 class CanonicalConfig:
     """Config used in ouf project"""
     def __init__(self):
-        self.width = 512
-        self.height = 512
+        self.width = 384
+        self.height = 384
         self.stride = 4  # 用于计算网络输出的feature map的尺寸
-        self.img_mean = [0.485, 0.456, 0.406]  # RGB format mean and standard variance
-        self.img_std = [0.229, 0.224, 0.225]
+        # self.img_mean = [0.485, 0.456, 0.406]  # RGB format mean and standard variance
+        # self.img_std = [0.229, 0.224, 0.225]
         self.parts = ["nose", "neck", "Rsho", "Relb", "Rwri", "Lsho", "Lelb", "Lwri", "Rhip", "Rkne", "Rank",
                       "Lhip", "Lkne", "Lank", "Reye", "Leye", "Rear", "Lear"]  # , "navel"
         self.num_parts = len(self.parts)

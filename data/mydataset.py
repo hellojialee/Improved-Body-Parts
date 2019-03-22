@@ -57,7 +57,7 @@ if __name__ == '__main__':  # for debug
         print("produce %d samples per second: " % (batch / (time() - start)))
 
     config = GetConfig("Canonical")
-    soureconfig = COCOSourceConfig("../data/dataset/coco/coco_val_dataset512.h5")
+    soureconfig = COCOSourceConfig("../data/dataset/coco/link2coco2017/coco_val_dataset384.h5")
 
     val_client = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
     # test the data generator

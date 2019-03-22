@@ -27,8 +27,8 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
-parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_distributed', help='save path')
+parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
                           "re-normalize it to have the norm equal to max_grad_norm"))
@@ -81,7 +81,7 @@ posenet = Network(opt, config, dist=True)
 # fixme: add up momentum if the batch grows?
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2, last_epoch=-1)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.2, last_epoch=-1)
 
 
 if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的momentum大小
@@ -386,7 +386,7 @@ def reduce_tensor(tensor):
 
 
 if __name__ == '__main__':
-    for epoch in range(start_epoch, start_epoch + 200):
+    for epoch in range(start_epoch, start_epoch + 70):
         train(epoch)
         test(epoch)
 

@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
@@ -221,6 +221,6 @@ def test(epoch, show_image=False):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
-        # train(epoch)
-        test(epoch, show_image=True)
+        train(epoch)
+        test(epoch, show_image=False)
 

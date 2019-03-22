@@ -564,7 +564,7 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(posenet.parameters())  # Redundant.
 
-    posenet, optimizer = amp.initialize(posenet, optimizer,
+    posenet  = amp.initialize(posenet,
                                         opt_level=args.opt_level,
                                         keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                                         loss_scale=args.loss_scale)
