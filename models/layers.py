@@ -43,26 +43,23 @@ class Conv(nn.Module):
     def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=False, relu=True):
         super(Conv, self).__init__()
         self.inp_dim = inp_dim
+        self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=True)
         self.relu = None
         self.bn = None
         if relu:
             self.relu = nn.ReLU(inplace=True)
         if bn:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=False)
-            # Different form TF, momentum default in Pytorch is 0.1, which means the decay rate of old running value
             self.bn = nn.BatchNorm2d(out_dim)
-        else:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=True)
 
     def forward(self, x):
         # examine the input channel equals the conve kernel channel
         assert x.size()[1] == self.inp_dim, "input channel {} dese not fit kernel channel {}".format(x.size()[1],
                                                                                                      self.inp_dim)
         x = self.conv(x)
-        if self.bn is not None:
-            x = self.bn(x)
         if self.relu is not None:
             x = self.relu(x)
+        if self.bn is not None:
+            x = self.bn(x)
         return x
 
 

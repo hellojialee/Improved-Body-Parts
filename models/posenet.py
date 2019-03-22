@@ -12,9 +12,9 @@ from models.loss_model import MultiTaskLoss
 class Merge(nn.Module):
     """Change the channel dimension of the input tensor"""
 
-    def __init__(self, x_dim, y_dim, bn=False):
+    def __init__(self, x_dim, y_dim):
         super(Merge, self).__init__()
-        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)
+        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=False)
 
     def forward(self, x):
         return self.conv(x)
@@ -62,7 +62,7 @@ class PoseNet(nn.Module):
         # Notice: nn.ModuleList can only identify Module subclass! Thus, we must pack the inner layers in ModuleList.
         self.outs = nn.ModuleList(
             [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 3, relu=False, bn=False) for j in range(5)]) for i in
-             range(nstack)])  # todo: 我们把1×1卷积换成了3×3, 最后一层应该有没有BN,且不加激活函数
+             range(nstack)])  # todo: 我们把1×1卷积换成了3×3
         self.merge_features = nn.ModuleList(
             [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase) for j in range(5)]) for i in
              range(nstack - 1)])
@@ -177,7 +177,7 @@ class NetworkEval(torch.nn.Module):
 if __name__ == '__main__':
     from time import time
 
-    pose = PoseNet(4, 256, 54, bn=True)  # .cuda()
+    pose = PoseNet(4, 256, 54)  # .cuda()
     for param in pose.parameters():
         if param.requires_grad:
             print('param autograd')

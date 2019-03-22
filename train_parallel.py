@@ -221,6 +221,6 @@ def test(epoch, show_image=False):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
-        train(epoch)
-        test(epoch, show_image=False)
+        # train(epoch)
+        test(epoch, show_image=True)
 

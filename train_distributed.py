@@ -35,7 +35,7 @@ parser.add_argument('--max_grad_norm', default=5, type=float,
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--opt-level', type=str, default='O1')
-parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
+parser.add_argument('--sync_bn', action='store_true', help='enabling apex sync BN.')  # 无触发为false， -c 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
@@ -76,7 +76,7 @@ if args.distributed:
 
 assert torch.backends.cudnn.enabled, "Amp requires cudnn backend to be enabled."
 
-posenet = Network(opt, config, dist=True, bn=False)
+posenet = Network(opt, config, dist=True)
 # Actual working batch size on multi-GPUs is 4 times bigger than that on one GPU
 # fixme: add up momentum if the batch grows?
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
@@ -87,7 +87,6 @@ scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.2, l
 if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的momentum大小
     #  This should be done before model = DDP(model, delay_allreduce=True),
     #  because DDP needs to see the finalized model parameters
-    # We rely on torch distributed for synchronization between processes. Only DDP support the apex sync_bn now.
     import apex
     print("Using apex synced BN.")
     posenet = apex.parallel.convert_syncbn_model(posenet)

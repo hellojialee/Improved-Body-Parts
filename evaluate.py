@@ -73,9 +73,6 @@ def predict(image, params, model, model_params, heat_layers, paf_layers):
         # ################################# Important!  ###########################################
         # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
         input_img = np.float32(imageToTest_padded[None, ...] / 255)
-        input_img -= np.array(config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
-        input_img /= np.array(config.img_std[::-1])
-
         input_img = torch.from_numpy(input_img).cuda()
 
         output_tuple = posenet(input_img)
@@ -423,7 +420,7 @@ def find_people(connection_all, special_k, all_peaks, params):
 
 
 def process(input_image, params, model, model_params, heat_layers, paf_layers):
-    oriImg = cv2.imread(input_image)  # B,G,R order !!
+    oriImg = cv2.imread(input_image)  # B,G,R order
     # print(input_image)
     heat, paf = predict(oriImg, params, model, model_params, heat_layers, paf_layers)
 
