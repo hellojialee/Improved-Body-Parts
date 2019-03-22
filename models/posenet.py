@@ -136,7 +136,7 @@ class Network(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False, dist=False):
         super(Network, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layersz, bn=bn)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
         # If we use train_parallel, we implement the parallel loss . And if we use train_distributed,
         # we should use single process loss because each process on these 4 GPUs  is independent
         self.criterion = MultiTaskLoss(opt, config) if dist else MultiTaskLossParallel(opt, config)
