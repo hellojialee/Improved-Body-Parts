@@ -63,7 +63,7 @@ class MultiTaskLoss(nn.Module):
         # plt.imshow(offset[2, :,:])  # mask_all
         # plt.show()
         # #####################################################
-        heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
+        heatmap_loss = self.l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
                                           , nstack_weight=self.nstack_weight)
         offset_loss = self.l1_loss(pred_offset, gt_offsets[None, ...], gt_mask_offsets[None, ...],
                                    nstack_weight=self.nstack_weight)

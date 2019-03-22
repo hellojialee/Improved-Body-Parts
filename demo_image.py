@@ -47,7 +47,7 @@ parser.add_argument('--resume', '-r', action='store_true', default=True, help='r
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/cocotry2.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/ski.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -109,6 +109,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # ################################# Important!  ###########################################
         # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
         input_img = np.float32(imageToTest_padded[None, ...] / 255)
+        input_img -= np.array(config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
+        input_img /= np.array(config.img_std[::-1])
+
         input_img = torch.from_numpy(input_img).cuda()
         # output tensor dtype: float 16
         output_tuple = posenet(input_img)

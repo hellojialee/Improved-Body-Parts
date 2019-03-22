@@ -4,8 +4,8 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 10  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
-    learning_rate = 3e-4  # for single process 整个分布式模型总的是learning_rate*world_size
+    batch_size = 8  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    learning_rate = 1e-4  # for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"
     hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset512.h5"
@@ -47,6 +47,8 @@ class CanonicalConfig:
         self.width = 512
         self.height = 512
         self.stride = 4  # 用于计算网络输出的feature map的尺寸
+        self.img_mean = [0.485, 0.456, 0.406]  # RGB format mean and standard variance
+        self.img_std = [0.229, 0.224, 0.225]
         self.parts = ["nose", "neck", "Rsho", "Relb", "Rwri", "Lsho", "Lelb", "Lwri", "Rhip", "Rkne", "Rank",
                       "Lhip", "Lkne", "Lank", "Reye", "Leye", "Rear", "Lear"]  # , "navel"
         self.num_parts = len(self.parts)

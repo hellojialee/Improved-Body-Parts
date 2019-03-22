@@ -178,7 +178,10 @@ class Transformer:
         # meta['joints'].shape = (num_of_person, 18, 3)，其中18是18个关键点，3代表（x,y,v)
 
         # normalize image to 0~1 here to save gpu/cpu time
+        img = img.astype(np.float32) / 255.
+        img -= np.array(self.config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
+        img /= np.array(self.config.img_std[::-1])
         # mask - 除以255之后，被mask地方是0.0,没有mask地方是1.0
         # return transformed data as flot32 format
-        return img.astype(np.float32)/255., mask_miss.astype(np.float32)/255., mask_all.astype(np.float32)/255., meta
+        return img, mask_miss.astype(np.float32) / 255., mask_all.astype(np.float32) / 255., meta
 
