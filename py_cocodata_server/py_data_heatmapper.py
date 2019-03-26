@@ -88,7 +88,7 @@ class Heatmapper:
         # ------------------------------------------------------------- #
         # If in same point of answer mask is zero this means "ignore answers in this point while training network"
         # because loss will be zero in this point.
-
+        heatmaps = np.clip(heatmaps, 0., 1.)  # 防止数据异常
         return heatmaps.transpose((2, 0, 1))  # pytorch need N*C*H*W format
 
     def put_gaussian_maps(self, heatmaps, layer, joints):

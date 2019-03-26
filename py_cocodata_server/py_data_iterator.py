@@ -61,14 +61,15 @@ class RawDataIterator:
         # create heatmaps without mask
         labels = self.heatmapper.create_heatmaps(meta['joints'].astype(np.float32), mask_all)
 
-        offsets, mask_offset = self.heatmapper.put_offset(meta['joints'].astype(np.float32))
+        # offsets, mask_offset = self.heatmapper.put_offset(meta['joints'].astype(np.float32))  todo
+
         # # # debug for showing the generate keypoingt or body part heatmaps
         # show_labels = cv2.resize(labels, image.shape[:2], interpolation=cv2.INTER_CUBIC)
         # plt.imshow(image[:, :, [2, 1, 0]])
         # plt.imshow(show_labels[:, :, 10], alpha=0.5)  # mask_all
         # plt.show()
         return torch.from_numpy(image), torch.from_numpy(mask_miss[np.newaxis, :, :]), \
-            torch.from_numpy(labels), torch.from_numpy(offsets), torch.from_numpy(mask_offset)
+            torch.from_numpy(labels)    #, torch.from_numpy(offsets), torch.from_numpy(mask_offset)
 
     def read_data(self, key):
 

@@ -12,9 +12,9 @@ from models.loss_model import MultiTaskLoss
 class Merge(nn.Module):
     """Change the channel dimension of the input tensor"""
 
-    def __init__(self, x_dim, y_dim):
+    def __init__(self, x_dim, y_dim, bn=False):
         super(Merge, self).__init__()
-        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=False)
+        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)
 
     def forward(self, x):
         return self.conv(x)
@@ -61,13 +61,13 @@ class PoseNet(nn.Module):
         # predict 5 different scales of heatmpas per stack, keep in mind to pack the list using ModuleList.
         # Notice: nn.ModuleList can only identify Module subclass! Thus, we must pack the inner layers in ModuleList.
         self.outs = nn.ModuleList(
-            [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 3, relu=False, bn=False) for j in range(5)]) for i in
-             range(nstack)])  # todo: 我们把1×1卷积换成了3×3
+            [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 1, relu=False, bn=False) for j in range(5)]) for i in
+             range(nstack)])  # todo: 我们把1×1卷积换成了3×3, 最后一层应该有没有BN,且不加激活函数
         self.merge_features = nn.ModuleList(
-            [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase) for j in range(5)]) for i in
+            [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase, bn=False) for j in range(5)]) for i in
              range(nstack - 1)])
         self.merge_preds = nn.ModuleList(
-            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase) for j in range(5)]) for i in range(nstack - 1)])
+            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase, bn=False) for j in range(5)]) for i in range(nstack - 1)])
         self.nstack = nstack
         if init_weights:
             self._initialize_weights()
@@ -136,7 +136,7 @@ class Network(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False, dist=False):
         super(Network, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
         # If we use train_parallel, we implement the parallel loss . And if we use train_distributed,
         # we should use single process loss because each process on these 4 GPUs  is independent
         self.criterion = MultiTaskLoss(opt, config) if dist else MultiTaskLossParallel(opt, config)
@@ -160,7 +160,7 @@ class NetworkEval(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False):
         super(NetworkEval, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=bn)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
 
     def forward(self, inp_imgs):
         # Batch will be divided and Parallel Model will call this forward on every GPU
@@ -177,7 +177,7 @@ class NetworkEval(torch.nn.Module):
 if __name__ == '__main__':
     from time import time
 
-    pose = PoseNet(4, 256, 54)  # .cuda()
+    pose = PoseNet(4, 256, 54, bn=True)  # .cuda()
     for param in pose.parameters():
         if param.requires_grad:
             print('param autograd')

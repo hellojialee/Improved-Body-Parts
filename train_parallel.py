@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
@@ -92,10 +92,11 @@ if args.resume:
             if torch.is_tensor(v):
                 state[k] = v.cuda()
     print('Optimizer has been resumed from checkpoint...')
-
     best_loss = checkpoint['train_loss']
     print('******************** Best loss resumed is :', best_loss, '  ************************')
     start_epoch = checkpoint['epoch'] + 1
+    del checkpoint
+torch.cuda.empty_cache()
 
 
 if use_cuda:
@@ -104,7 +105,7 @@ if use_cuda:
     torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
     # torch.backends.cudnn.deterministic = True
 
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1, last_epoch=-1)     # 设置学习率下降策略
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1, last_epoch=-1)     # 设置学习率下降策略
 for i in range(start_epoch):
     #  update the learning rate for start_epoch times
     scheduler.step()
@@ -130,7 +131,7 @@ def train(epoch):
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
         # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
-        images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+        images, mask_misses, heatmaps = target_tuple  # , offsets, mask_offsets
         # images = Variable(images)
         # loc_targets = Variable(loc_targets)
         # conf_targets = Variable(conf_targets)
@@ -161,7 +162,7 @@ def train(epoch):
 
     os.makedirs(checkpoint_path, exist_ok=True)
     logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
-    logger.write('\ntrain_loss of epoch {} : {}'.format(epoch, train_loss))
+    logger.write('\nEpoch {}\ttrain_loss: {}'.format(epoch, train_loss))  # validation时不要\n换行
     logger.flush()
     logger.close()
     if train_loss < best_loss:
@@ -190,7 +191,7 @@ def test(epoch, show_image=False):
                 target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
             # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
-            images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+            images, mask_misses, heatmaps = target_tuple  # , offsets, mask_offsets
             # images = Variable(images)
             # loc_targets = Variable(loc_targets)
             # conf_targets = Variable(conf_targets)
@@ -201,20 +202,20 @@ def test(epoch, show_image=False):
             test_loss += loss.item()  # 累加的loss
             print('  Test loss : %.3f, accumulated average loss: %.3f' % (loss.item(), test_loss / (batch_idx + 1)))
             if show_image:
-                image, mask_miss, labels, offsets, mask_offset = [v.cpu().numpy() for v in target_tuple]
+                image, mask_miss, labels = [v.cpu().numpy() for v in target_tuple]  # , offsets, mask_offset
                 output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
                 # show the generated ground truth
                 img = image[0]
                 output = output[0].transpose((1, 2, 0))
                 img = cv2.resize(img, output.shape[:2], interpolation=cv2.INTER_CUBIC)
                 plt.imshow(img[:, :, [2, 1, 0]])  # Opencv image format: BGR
-                plt.imshow(output[:, :, 1], alpha=0.5)  # mask_all
+                plt.imshow(output[:, :, 28], alpha=0.5)  # mask_all
                 # plt.imshow(mask_offset[:, :, 2], alpha=0.5)  # mask_all
                 plt.show()
 
     os.makedirs(checkpoint_path, exist_ok=True)
     logger = open(os.path.join('./' + checkpoint_path, 'log'), 'a+')
-    logger.write('\nval_loss of epoch {} : {}'.format(epoch, test_loss / len(val_loader)))
+    logger.write('\tval_loss: {}'.format(test_loss / len(val_loader)))  # validation时不要\n换行
     logger.flush()
     logger.close()
 

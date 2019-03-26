@@ -29,7 +29,7 @@ warnings.filterwarnings("ignore")
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
-parser.add_argument('--max_grad_norm', default=5, type=float,
+parser.add_argument('--max_grad_norm', default=20, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
                           "re-normalize it to have the norm equal to max_grad_norm"))
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
@@ -79,17 +79,10 @@ assert torch.backends.cudnn.enabled, "Amp requires cudnn backend to be enabled."
 posenet = Network(opt, config, dist=True)
 # Actual working batch size on multi-GPUs is 4 times bigger than that on one GPU
 # fixme: add up momentum if the batch grows?
+# fixme: change weight_decay?
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.2, last_epoch=-1)
-
-
-if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的momentum大小
-    #  This should be done before model = DDP(model, delay_allreduce=True),
-    #  because DDP needs to see the finalized model parameters
-    import apex
-    print("Using apex synced BN.")
-    posenet = apex.parallel.convert_syncbn_model(posenet)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1, last_epoch=-1)
 
 posenet.cuda()
 
@@ -147,7 +140,7 @@ if args.resume:
             print('Optimizer has been resumed from checkpoint...')
             global best_loss, start_epoch  # global declaration. otherwise best_loss and start_epoch can not be changed
             best_loss = checkpoint['train_loss']
-            print('******************** Best loss resumed is :', checkpoint['train_loss'], '  ************************')
+            print('******************** Best loss resumed is :', best_loss, '  ************************')
             start_epoch = checkpoint['epoch'] + 1
             print("========> Resume and start training from Epoch {} ".format(start_epoch))
             del checkpoint
@@ -191,7 +184,7 @@ def train(epoch):
         train_sampler.set_epoch(epoch)
     # train_loss = 0
     scheduler.step()
-    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
+    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'] * opt.batch_size)  # scheduler.get_lr()[0]
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -206,23 +199,21 @@ def train(epoch):
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
         # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
-        images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+        images, mask_misses, heatmaps = target_tuple  # , offsets, mask_offsets
         # images = Variable(images)
         # loc_targets = Variable(loc_targets)
         # conf_targets = Variable(conf_targets)
-
-        loss = model(images, target_tuple[1:])
         optimizer.zero_grad()  # zero the gradient buff
+        loss = model(images, target_tuple[1:])
 
-        if loss.item() > 1e6:
+        if loss.item() > 2e5:
             print("\nLoss is abnormal, drop this batch !")
-            loss.zero_()
             continue
 
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
 
-        torch.nn.utils.clip_grad_norm(model.parameters(), args.max_grad_norm)
+        torch.nn.utils.clip_grad_norm(model.parameters(), args.max_grad_norm)  # fixme: 可能是这个的问题吗？
         optimizer.step()  # TODO：可以使用累加的loss变相增大batch size，但对于bn层需要减少默认的momentum
 
         # train_loss += loss.item()  # 累加的loss !
@@ -287,7 +278,7 @@ def test(epoch):
     posenet.eval()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     if args.distributed:
-        train_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
+        val_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
@@ -301,7 +292,7 @@ def test(epoch):
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
         # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
-        images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+        images, mask_misses, heatmaps = target_tuple  # , offsets, mask_offsets
 
         with torch.no_grad():
             _, loss = model(images, target_tuple[1:])
@@ -386,7 +377,7 @@ def reduce_tensor(tensor):
 
 
 if __name__ == '__main__':
-    for epoch in range(start_epoch, start_epoch + 70):
+    for epoch in range(start_epoch, start_epoch + 80):
         train(epoch)
         test(epoch)
 

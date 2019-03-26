@@ -42,17 +42,17 @@ if __name__ == '__main__':  # for debug
         for index in range(train_client.__len__()):
             batch += 1
 
-            image, mask_miss, labels, offsets, mask_offset = [v.numpy() for v in
+            image, mask_miss, labels = [v.numpy() for v in    # , offsets, mask_offset
                                             train_client.__getitem__(index)]
 
             # show the generated ground truth
             if show_image:
                 show_labels = cv2.resize(labels.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
-                offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-                mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                # mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
                 # plt.imshow(offsets[:, :, -1], alpha=0.5)  # mask_all
-                plt.imshow(mask_offset[:, :, 4], alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, -15], alpha=0.5)  # mask_all
                 plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))
 

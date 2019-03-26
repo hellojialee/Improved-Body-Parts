@@ -11,7 +11,7 @@ class MultiTaskLoss(nn.Module):
         self.nstack = opt.nstack
         self.batch_size = opt.batch_size
         self.offset_start = config.offset_start
-        self.multi_task_weight = opt.multi_task_weight
+        # self.multi_task_weight = opt.multi_task_weight
         self.scale_weight = opt.scale_weight
         self.nstack_weight = opt.nstack_weight
         self.heatmap_weight = heatmap_weight
@@ -46,13 +46,13 @@ class MultiTaskLoss(nn.Module):
         """
         # TODO： 没有平衡keypoint 和 body part两部分损失，可以在这里把heatmap进一步拆分
         pred_heatmap = pred[:, :, :self.offset_start]
-        pred_offset = pred[:, :, self.offset_start:]
+        # pred_offset = pred[:, :, self.offset_start:]
 
         gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])
-        gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
+        # gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_misses = F.interpolate(target[0], size=pred.shape[-2:], mode='bilinear')
-        gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
-        # gt_mask_offsets = F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
+        # gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
+        # # gt_mask_offsets = F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
 
         # ############# For debug ##############################
         # heatmap = gt_heatmaps[0,...].cpu().numpy().squeeze()
@@ -63,13 +63,14 @@ class MultiTaskLoss(nn.Module):
         # plt.imshow(offset[2, :,:])  # mask_all
         # plt.show()
         # #####################################################
-        heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
+        heatmap_loss = self.l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...]
                                           , nstack_weight=self.nstack_weight)
-        offset_loss = self.l1_loss(pred_offset, gt_offsets[None, ...], gt_mask_offsets[None, ...],
-                                   nstack_weight=self.nstack_weight)
-
-        multi_task_loss = heatmap_loss * self.multi_task_weight[0] + offset_loss * self.multi_task_weight[1]
-        return multi_task_loss / sum(self.multi_task_weight)
+        # offset_loss = self.l1_loss(pred_offset, gt_offsets[None, ...], gt_mask_offsets[None, ...],
+        #                            nstack_weight=self.nstack_weight)
+        #
+        # multi_task_loss = heatmap_loss * self.multi_task_weight[0] + offset_loss * self.multi_task_weight[1]
+        # return multi_task_loss / sum(self.multi_task_weight)
+        return heatmap_loss
 
     @staticmethod
     def focal_l2_loss(s, sxing, mask_miss, gamma=2, nstack_weight=[1, 1, 1, 1]):

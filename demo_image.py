@@ -20,7 +20,7 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
+# os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 limbSeq = [[1, 0], [1, 14], [1, 15], [1, 16], [1, 17], [0, 14], [0, 15], [14, 16], [15, 17],
@@ -47,7 +47,7 @@ parser.add_argument('--resume', '-r', action='store_true', default=True, help='r
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/cocotry2.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/coco6.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -65,7 +65,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 17], 1.5 * paf_avg[:, :, 17])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 4], 1.5 * paf_avg[:, :, 4])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -84,7 +84,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.show()
 
     plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, 12], alpha=.5)
+    plt.imshow(heatmap_avg[:, :, 5], alpha=.5)
     plt.show()
 
 
@@ -109,6 +109,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # ################################# Important!  ###########################################
         # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
         input_img = np.float32(imageToTest_padded[None, ...] / 255)
+        # input_img -= np.array(config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
+        # input_img /= np.array(config.img_std[::-1])
+
         input_img = torch.from_numpy(input_img).cuda()
         # output tensor dtype: float 16
         output_tuple = posenet(input_img)
@@ -449,7 +452,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                 elif not found and k < 24:
                     # Fixme: 原始的时候是18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
-                    # FIXME: 但是后面画limb的时候没有把鼻子和眼睛耳朵的连线画上，要改进
+                    #  但是后面画limb的时候没有把鼻子和眼睛耳朵的连线画上，要改进
                     row = -1 * np.ones((20, 2))
                     row[indexA][0] = partAs[i]
                     row[indexA][1] = connection_all[k][i][2]
@@ -564,7 +567,7 @@ if __name__ == '__main__':
 
     optimizer = optim.Adam(posenet.parameters())  # Redundant.
 
-    posenet, optimizer = amp.initialize(posenet,  optimizer,
+    posenet, optimizer = amp.initialize(posenet, optimizer,
                                         opt_level=args.opt_level,
                                         keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                                         loss_scale=args.loss_scale)
@@ -576,7 +579,7 @@ if __name__ == '__main__':
     tic = time.time()
     # generate image with body parts
     with torch.no_grad():
-        canvas = process(input_image, params, model_params, config.heat_layers+2, config.paf_layers)  # background + 2
+        canvas = process(input_image, params, model_params, config.heat_layers + 2, config.paf_layers)  # todo background + 2
 
     toc = time.time()
     print('processing time is %.5f' % (toc - tic))
