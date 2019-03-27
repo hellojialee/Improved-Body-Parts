@@ -84,7 +84,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.show()
 
     plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, 5], alpha=.5)
+    plt.imshow(heatmap_avg[:, :, -2], alpha=.5)
     plt.show()
 
 

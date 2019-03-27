@@ -46,7 +46,7 @@ use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
 
-posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers + config.offset_layers, bn=False)
+posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=False)
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate, momentum=0.9, weight_decay=1e-4)
 
 if args.resume:

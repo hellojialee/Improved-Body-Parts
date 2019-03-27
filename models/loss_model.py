@@ -45,7 +45,7 @@ class MultiTaskLoss(nn.Module):
         :return:
         """
         # TODO： 没有平衡keypoint 和 body part两部分损失，可以在这里把heatmap进一步拆分
-        pred_heatmap = pred[:, :, :self.offset_start]
+        pred_heatmap = pred  # pred[:, :, :self.offset_start]
         # pred_offset = pred[:, :, self.offset_start:]
 
         gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])
@@ -125,9 +125,12 @@ class MultiTaskLoss(nn.Module):
         :return: a scalar tensor
         """
         # multiplied by mask_miss via broadcast operation
+        eps = 1e-8  # 1e-12
+        s = torch.clamp(s, eps, 1.2 - eps)  # improve the stability of the loss
         out = (s - sxing) ** 2 * mask_miss  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
-        loss_nstack = out.sum(dim=(1, 2, 3, 4))
+        # #  loss_nstack = out.sum(dim=(1, 2, 3, 4))
+        loss_nstack = out.sum(dim=4).sum(dim=3).sum(dim=2).sum(dim=1)
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]

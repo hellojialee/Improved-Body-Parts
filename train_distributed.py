@@ -27,15 +27,15 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
-parser.add_argument('--max_grad_norm', default=20, type=float,
+parser.add_argument('--max_grad_norm', default=10, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
                           "re-normalize it to have the norm equal to max_grad_norm"))
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--opt-level', type=str, default='O1')
-parser.add_argument('--sync_bn', action='store_true', help='enabling apex sync BN.')  # 无触发为false， -c 触发为true
+parser.add_argument('--sync_bn',  action='store_true', default=False, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
@@ -76,21 +76,33 @@ if args.distributed:
 
 assert torch.backends.cudnn.enabled, "Amp requires cudnn backend to be enabled."
 
-posenet = Network(opt, config, dist=True)
+model = Network(opt, config, dist=True, bn=False)
+
+if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的momentum大小
+    #  This should be done before model = DDP(model, delay_allreduce=True),
+    #  because DDP needs to see the finalized model parameters
+    # We rely on torch distributed for synchronization between processes. Only DDP support the apex sync_bn now.
+    import apex
+    print("Using apex synced BN.")
+    model = apex.parallel.convert_syncbn_model(model)
+
+
+# It should be called before constructing optimizer if the module will live on GPU while being optimized.
+model.cuda()
+
 # Actual working batch size on multi-GPUs is 4 times bigger than that on one GPU
 # fixme: add up momentum if the batch grows?
 # fixme: change weight_decay?
-optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
+optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
 scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1, last_epoch=-1)
 
-posenet.cuda()
 
 # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
 # for convenient interoperation with argparse.
 # For distributed training, wrap the model with apex.parallel.DistributedDataParallel.
 # This must be done AFTER the call to amp.initialize.
-model, optimizer = amp.initialize(posenet, optimizer,
+model, optimizer = amp.initialize(model, optimizer,
                                   opt_level=args.opt_level,
                                   keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                                   loss_scale=args.loss_scale)  # Dynamic loss scaling is used by default.
@@ -178,7 +190,7 @@ for i in range(start_epoch):
 
 def train(epoch):
     print('\n ############################# Train phase, Epoch: {} #############################'.format(epoch))
-    posenet.train()
+    model.train()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     if args.distributed:
         train_sampler.set_epoch(epoch)
@@ -191,9 +203,9 @@ def train(epoch):
     end = time.time()
 
     for batch_idx, target_tuple in enumerate(train_loader):
-        # images.requires_grad_()
-        # loc_targets.requires_grad_()
-        # conf_targets.requires_grad_()
+        # # ##############  adjust learning rate #####################
+        # adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader))
+        # # ##########################################################
         if use_cuda:
             #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
@@ -206,14 +218,14 @@ def train(epoch):
         optimizer.zero_grad()  # zero the gradient buff
         loss = model(images, target_tuple[1:])
 
-        if loss.item() > 2e5:
-            print("\nLoss is abnormal, drop this batch !")
+        if loss.item() > 2e5:  # try to rescue the gradient explosion
+            print("\nOh My God ! \nLoss is abnormal, drop this batch !")
             continue
 
         with amp.scale_loss(loss, optimizer) as scaled_loss:
             scaled_loss.backward()
 
-        torch.nn.utils.clip_grad_norm(model.parameters(), args.max_grad_norm)  # fixme: 可能是这个的问题吗？
+        # torch.nn.utils.clip_grad_norm_(amp.master_params(optimizer), args.max_grad_norm)  # fixme: 可能是这个的问题吗？
         optimizer.step()  # TODO：可以使用累加的loss变相增大batch size，但对于bn层需要减少默认的momentum
 
         # train_loss += loss.item()  # 累加的loss !
@@ -275,10 +287,10 @@ def train(epoch):
 
 def test(epoch):
     print('\n ############################# Test phase, Epoch: {} #############################'.format(epoch))
-    posenet.eval()
+    model.eval()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
-    if args.distributed:
-        val_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
+    # if args.distributed:
+    #     val_sampler.set_epoch(epoch)  # 验证集太小，不够4个划分
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
@@ -328,8 +340,7 @@ def test(epoch):
         logger.close()
 
 
-def adjust_learning_rate(optimizer, epoch, step, len_epoch):
-    """LR schedule that should yield 76% converged accuracy with batch size 256"""
+def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
     factor = epoch // 30
 
     if epoch >= 80:
@@ -338,8 +349,9 @@ def adjust_learning_rate(optimizer, epoch, step, len_epoch):
     lr = args.lr*(0.1**factor)
 
     """Warmup"""
-    if epoch < 5:
-        lr = lr*float(1 + step + epoch*len_epoch)/(5.*len_epoch)  # len_epoch=len(train_loader)
+    if use_warmup:
+        if epoch < 5:
+            lr = lr*float(1 + step + epoch*len_epoch)/(5.*len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):
     #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))

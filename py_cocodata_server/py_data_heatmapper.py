@@ -164,13 +164,23 @@ class Heatmapper:
         for i in range(joint_from.shape[0]):
             (x1, y1) = joint_from[i]
             (x2, y2) = joint_to[i]
-            if x1 == x2 and y1 == y2:
+
+            dx = x2 - x1
+            dy = y2 - y1
+            dnorm = dx * dx + dy * dy
+
+            if dnorm == 0:  # we get nan here sometimes, it's kills NN
                 # we get nan here sometimes, it's kills NN
                 # handle it better. probably we should add zero paf, centered paf,
                 # or skip this completely. add a special paf?
                 # 我认为可以不用去处理，在后处理时，把没有形成limb的点分配给距离最近的那个人即可
                 print("Parts are too close to each other. Length is zero. Skipping")
                 continue
+
+            dx = dx / dnorm
+            dy = dy / dnorm
+
+            assert not isnan(dx) and not isnan(dy), "dnorm is zero, wtf"
 
             min_sx, max_sx = (x1, x2) if x1 < x2 else (x2, x1)
             min_sy, max_sy = (y1, y2) if y1 < y2 else (y2, y1)
@@ -298,7 +308,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     detaY = y1 - Y
     norm2 = sqrt(xD ** 2 + yD ** 2)  # 注意norm2是一个数而不是numpy数组,因为xD, yD都是一个数。单个数字运算math比numpy快
     dist = xD * detaY - detaX * yD  # 常数与numpy数组(X,Y是坐标数组,多个坐标）的运算，broadcast
-    dist /= norm2
+    dist /= (norm2 + 1e-6)
     dist = np.abs(dist)
     # ratiox = np.abs(detaX / (xD + 1e-8))
     # ratioy = np.abs(detaY / (yD + 1e-8))

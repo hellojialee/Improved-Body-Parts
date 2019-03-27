@@ -52,12 +52,12 @@ if __name__ == '__main__':  # for debug
                 # mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
                 # plt.imshow(offsets[:, :, -1], alpha=0.5)  # mask_all
-                plt.imshow(show_labels[:, :, -15], alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, -7], alpha=0.5)  # mask_all
                 plt.show()
         print("produce %d samples per second: " % (batch / (time() - start)))
 
     config = GetConfig("Canonical")
-    soureconfig = COCOSourceConfig("../data/dataset/coco/link2coco2017/coco_val_dataset384.h5")
+    soureconfig = COCOSourceConfig("../data/dataset/coco/link2coco2017/coco_train_dataset384.h5")
 
     val_client = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
     # test the data generator

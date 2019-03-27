@@ -12,9 +12,9 @@ from models.loss_model import MultiTaskLoss
 class Merge(nn.Module):
     """Change the channel dimension of the input tensor"""
 
-    def __init__(self, x_dim, y_dim, bn=False):
+    def __init__(self, x_dim, y_dim):
         super(Merge, self).__init__()
-        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)
+        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=False)
 
     def forward(self, x):
         return self.conv(x)
@@ -62,12 +62,15 @@ class PoseNet(nn.Module):
         # Notice: nn.ModuleList can only identify Module subclass! Thus, we must pack the inner layers in ModuleList.
         self.outs = nn.ModuleList(
             [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 1, relu=False, bn=False) for j in range(5)]) for i in
-             range(nstack)])  # todo: 我们把1×1卷积换成了3×3, 最后一层应该有没有BN,且不加激活函数
+             range(nstack)])
+        self.channel_attention = nn.ModuleList(
+            [nn.ModuleList([SELayer(inp_dim + j * increase) for j in range(5)]) for i in
+             range(nstack)])
         self.merge_features = nn.ModuleList(
-            [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase, bn=False) for j in range(5)]) for i in
+            [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase) for j in range(5)]) for i in
              range(nstack - 1)])
         self.merge_preds = nn.ModuleList(
-            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase, bn=False) for j in range(5)]) for i in range(nstack - 1)])
+            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase) for j in range(5)]) for i in range(nstack - 1)])
         self.nstack = nstack
         if init_weights:
             self._initialize_weights()
@@ -85,10 +88,14 @@ class PoseNet(nn.Module):
 
             if i == 0:  # cache for smaller feature maps produced by hourglass block
                 features_cache = [torch.zeros_like(hourglass_feature[scale]) for scale in range(5)]
+                for s in range(5):  # channel attention before heatmap regression
+                    hourglass_feature[s] = self.channel_attention[i][s](hourglass_feature[s])
             else:  # residual connection across stacks
                 for k in range(5):
                     #  python里面的+=, ，*=也是in-place operation,需要注意
-                    hourglass_feature[k] = hourglass_feature[k] + features_cache[k]
+                    hourglass_feature_attention = self.channel_attention[i][k](hourglass_feature[k])
+
+                    hourglass_feature[k] = hourglass_feature_attention + features_cache[k]
             # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 

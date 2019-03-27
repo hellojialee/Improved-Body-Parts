@@ -32,7 +32,8 @@ def make_dot(var, params=None):
     def add_nodes(var):
         if var not in seen:
             if torch.is_tensor(var):
-                dot.node(str(id(var)), size_to_str(var.size()), fillcolor='orange')
+                dot.node(str(id(var)), size_to_str(
+                    var.size()), fillcolor='orange')
             elif hasattr(var, 'variable'):
                 u = var.variable
                 name = param_map[id(u)] if params is not None else ''
@@ -86,7 +87,7 @@ if __name__ == '__main__':
     # ##############################################################3
 
     import torch.onnx
-    net = Hourglass(4, 256,  128,  resBlock=Conv)
+    net = Hourglass(4, 256, 128, resBlock=Conv)
     dummy_input = torch.randn(1, 256, 128, 128)
     torch.onnx.export(net, dummy_input, "hourglass.onnx")
 
@@ -98,14 +99,9 @@ if __name__ == '__main__':
     config = GetConfig(opt.config_name)
     pose = NetworkEval(opt, config, bn=False)
     pose.eval()
-    dummy_input = torch.randn(1, 512, 512, 3)
+    dummy_input = torch.randn(1, 384, 384, 3)
     y = pose(dummy_input)
-    torch.onnx.export(pose, dummy_input, "posenet.onnx")  # netron --host=localhost --port=8080
-    torch.onnx.export(pose, dummy_input, "posenet2.onnx")  # export onnx for the second time to check the model
-
-
-
-
-
-
-
+    # netron --host=localhost --port=8080
+    torch.onnx.export(pose, dummy_input, "posenet.onnx")
+    # export onnx for the second time to check the model
+    torch.onnx.export(pose, dummy_input, "posenet2.onnx")

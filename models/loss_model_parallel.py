@@ -127,7 +127,7 @@ class MultiTaskLossParallel(nn.Module):
         :return: a scalar tensor
         """
         # multiplied by mask_miss via broadcast operation
-        # eps = 1e-8  # 1e-12  # FIXME
+        # eps = 1e-8  # 1e-12  #
         # s = torch.clamp(s, eps, 1 - eps)
         out = (s - sxing) ** 2 * mask_miss  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
