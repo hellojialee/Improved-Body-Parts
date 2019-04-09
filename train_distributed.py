@@ -34,10 +34,10 @@ parser.add_argument('--max_grad_norm', default=10, type=float,
                           "re-normalize it to have the norm equal to max_grad_norm"))
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
-parser.add_argument('--opt-level', type=str, default='O1')
-parser.add_argument('--sync_bn',  action='store_true', default=False, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
+parser.add_argument('--opt-level', type=str, default='O0')
+parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
-parser.add_argument('--loss-scale', type=str, default=None)
+parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
 
 torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
@@ -73,10 +73,11 @@ if args.distributed:
     # Initializes the distributed backend which will take care of synchronizing nodes/GPUs
     torch.distributed.init_process_group(backend='nccl', init_method='env://')
     args.world_size = torch.distributed.get_world_size()  # 获取分布式训练的进程数
+    print("World Size is :", args.world_size)
 
 assert torch.backends.cudnn.enabled, "Amp requires cudnn backend to be enabled."
 
-model = Network(opt, config, dist=True, bn=False)
+model = Network(opt, config, dist=True, bn=True)
 
 if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的momentum大小
     #  This should be done before model = DDP(model, delay_allreduce=True),
@@ -93,9 +94,10 @@ model.cuda()
 # Actual working batch size on multi-GPUs is 4 times bigger than that on one GPU
 # fixme: add up momentum if the batch grows?
 # fixme: change weight_decay?
-optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
+#    nesterov = True
+optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.1, last_epoch=-1)
+scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.4, last_epoch=-1)
 
 
 # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
@@ -133,7 +135,7 @@ if args.resume:
                 #     continue
                 name = 'module.' + k  # add prefix 'module.'
                 new_state_dict[name] = v
-            model.load_state_dict(new_state_dict)  # , strict=False
+            model.load_state_dict(new_state_dict, strict=False)  # , strict=False
             # # #################################################
 
             # model.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
@@ -151,7 +153,7 @@ if args.resume:
                         state[k] = v.cuda()
             print('Optimizer has been resumed from checkpoint...')
             global best_loss, start_epoch  # global declaration. otherwise best_loss and start_epoch can not be changed
-            best_loss = checkpoint['train_loss']
+            # best_loss = checkpoint['train_loss']
             print('******************** Best loss resumed is :', best_loss, '  ************************')
             start_epoch = checkpoint['epoch'] + 1
             print("========> Resume and start training from Epoch {} ".format(start_epoch))
@@ -196,7 +198,7 @@ def train(epoch):
         train_sampler.set_epoch(epoch)
     # train_loss = 0
     scheduler.step()
-    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'] * opt.batch_size)  # scheduler.get_lr()[0]
+    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
 
     batch_time = AverageMeter()
     losses = AverageMeter()
@@ -274,7 +276,7 @@ def train(epoch):
         if losses.avg < best_loss:
             # Update the best_loss if the average loss drops
             best_loss = losses.avg
-            print('Saving model checkpoint...')
+            print('\nSaving model checkpoint...\n')
             state = {
                 # not posenet.state_dict(). then, we don't ge the "module" string to begin with
                 'weights': model.module.state_dict(),
@@ -389,7 +391,7 @@ def reduce_tensor(tensor):
 
 
 if __name__ == '__main__':
-    for epoch in range(start_epoch, start_epoch + 80):
+    for epoch in range(start_epoch, start_epoch + 100):
         train(epoch)
         test(epoch)
 

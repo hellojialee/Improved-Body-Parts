@@ -4,6 +4,7 @@ import numpy as np
 
 # 为了完成demo.py和notebook的运行，从另一个fork的project里拷贝过来的
 
+
 def config_reader():
     config = ConfigObj('/home/jia/Desktop/Improved-Body-Parts/utils/config')
 
@@ -20,7 +21,7 @@ def config_reader():
     param['use_gpu'] = int(param['use_gpu'])
     param['starting_range'] = float(param['starting_range'])
     param['ending_range'] = float(param['ending_range'])
-    param['scale_search'] = list(map(float, param['scale_search'])) # [float(param['scale_search'])]
+    param['scale_search'] = list(map(float, param['scale_search']))  # [float(param['scale_search'])]
     param['thre1'] = float(param['thre1'])
     param['thre2'] = float(param['thre2'])
     param['thre3'] = float(param['thre3'])
@@ -29,11 +30,13 @@ def config_reader():
     param['mid_num'] = int(param['mid_num'])
     param['min_num'] = int(param['min_num'])
     param['len_rate'] = float(param['len_rate'])
+    param['offset_box'] = int(param['offset_box'])
     param['crop_ratio'] = float(param['crop_ratio'])
     param['bbox_ratio'] = float(param['bbox_ratio'])
     param['GPUdeviceNumber'] = int(param['GPUdeviceNumber'])
 
     return param, model
+
 
 if __name__ == "__main__":
     config_reader()

@@ -47,7 +47,7 @@ parser.add_argument('--resume', '-r', action='store_true', default=True, help='r
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/coco6.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/v1.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -65,7 +65,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 4], 1.5 * paf_avg[:, :, 4])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 19], 1.5 * paf_avg[:, :, 19])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -83,9 +83,14 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.imshow(limb_flow, alpha=.5)
     plt.show()
 
-    plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
     plt.imshow(heatmap_avg[:, :, -2], alpha=.5)
     plt.show()
+
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
+    plt.imshow(heatmap_avg[:, :, -1], alpha=.5)
+    plt.show()
+
 
 
 def process(input_image, params, model_params, heat_layers, paf_layers):
@@ -132,6 +137,11 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                          interpolation=cv2.INTER_CUBIC)
         paf = paf[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
         paf = cv2.resize(paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
+        # ##############################     为了让平均heatmap不那么模糊？     ################################3
+        # heatmap[heatmap < params['thre1']] = 0
+        # paf[paf < params['thre2']] = 0
+        # ####################################################################################### #
+
         heatmap_avg = heatmap_avg + heatmap / len(multiplier)
         paf_avg = paf_avg + paf / len(multiplier)
 
@@ -538,10 +548,9 @@ if __name__ == '__main__':
     input_image = args.image
     output = args.output
 
-    posenet = NetworkEval(opt, config)
+    posenet = NetworkEval(opt, config, bn=True)
 
     print('Resuming from checkpoint ...... ')
-    checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
 
     # #################################################
     # from collections import OrderedDict
@@ -561,16 +570,16 @@ if __name__ == '__main__':
 
     if torch.cuda.is_available():
         posenet.cuda()
+
+    # from apex import amp
+    #
+    # optimizer = optim.Adam(posenet.parameters())  # Redundant.
+    #
+    # posenet, optimizer = amp.initialize(posenet, optimizer,
+    #                                     opt_level=args.opt_level,
+    #                                     keep_batchnorm_fp32=args.keep_batchnorm_fp32,
+    #                                     loss_scale=args.loss_scale)
     posenet.eval()   # set eval mode is important
-
-    from apex import amp
-
-    optimizer = optim.Adam(posenet.parameters())  # Redundant.
-
-    posenet, optimizer = amp.initialize(posenet, optimizer,
-                                        opt_level=args.opt_level,
-                                        keep_batchnorm_fp32=args.keep_batchnorm_fp32,
-                                        loss_scale=args.loss_scale)
 
     tic = time.time()
     print('start processing...')

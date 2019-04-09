@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
@@ -63,7 +63,7 @@ use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
 
-posenet = Network(opt, config, dist=False)
+posenet = Network(opt, config, dist=False, bn=False)
 posenet.cuda()
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate, momentum=0.9, weight_decay=1e-4)
 
@@ -227,6 +227,6 @@ def test(epoch, show_image=False):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
-        train(epoch)
-        test(epoch, show_image=False)
+        # train(epoch)
+        test(epoch, show_image=True)
 

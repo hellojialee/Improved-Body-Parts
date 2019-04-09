@@ -72,7 +72,7 @@ class Heatmapper:
 
         # add reverse keypoint gaussian heat map on the second background channel
         sl = slice(self.config.heat_start, self.config.heat_start + self.config.heat_layers)  # consider all real joints
-        heatmaps[:, :, self.config.bkg_start + 1] = 1. - np.amax(heatmaps[:, :, sl], axis=2)
+        heatmaps[:, :, self.config.bkg_start + 1] = np.amax(heatmaps[:, :, sl], axis=2)  # 1 -  #原来是取反的
 
         # 重要！不要忘了将生成的groundtruth heatmap乘以mask，以此掩盖掉没有标注的crowd以及只有很少keypoint的人
         # 并且，背景的mask_all没有乘以mask_miss，训练时只是对没有关键点标注的heatmap区域mask掉不做监督，而不需要对输入图片mask!
@@ -318,7 +318,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     # oncurve_dist = b * np.sqrt(1 - np.square(ratio * 2))  # oncurve_dist计算的是椭圆边界上的点到长轴的垂直距离
 
     guass_dist = gaussian(sigma, dist, 0)
-    guass_dist[guass_dist <= thresh] = 0  # 同前面的关键点响应，太远的不要
+    guass_dist[guass_dist <= thresh] = thresh  # 同前面的关键点响应，太远的不要
     # b = thre
     # guass_dist[dist >= b] = 0
 

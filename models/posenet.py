@@ -4,7 +4,7 @@ No skip residual connection between the same scales across different stacks.
 import math
 import torch
 from torch import nn
-from models.layers import Conv, Hourglass, SELayer
+from models.layers_transposed import Conv, Hourglass, SELayer, Backbone
 from models.loss_model_parallel import MultiTaskLossParallel
 from models.loss_model import MultiTaskLoss
 
@@ -49,13 +49,14 @@ class PoseNet(nn.Module):
         :param kwargs:
         """
         super(PoseNet, self).__init__()
-        self.pre = nn.Sequential(
-            Conv(3, 64, 7, 2, bn=bn),
-            Conv(64, 128, bn=bn),
-            nn.MaxPool2d(2, 2),
-            Conv(128, 128, bn=bn),
-            Conv(128, inp_dim, bn=bn)
-        )
+        # self.pre = nn.Sequential(
+        #     Conv(3, 64, 7, 2, bn=bn),
+        #     Conv(64, 128, bn=bn),
+        #     nn.MaxPool2d(2, 2),
+        #     Conv(128, 128, bn=bn),
+        #     Conv(128, inp_dim, bn=bn)
+        # )
+        self.pre = Backbone(nFeat=inp_dim)
         self.hourglass = nn.ModuleList([Hourglass(4, inp_dim, increase, bn=bn) for _ in range(nstack)])
         self.features = nn.ModuleList([Features(inp_dim, increase=increase, bn=bn) for _ in range(nstack)])
         # predict 5 different scales of heatmpas per stack, keep in mind to pack the list using ModuleList.
@@ -123,7 +124,7 @@ class PoseNet(nn.Module):
                 # TODO: 使用正态分布进行初始化（0, 0.01) 网络权重看看
                 # n = m.kernel_size[0] * m.kernel_size[1] * m.out_channels
                 # He kaiming 初始化, 方差为2/n. math.sqrt(2. / n) 或者直接使用现成的nn.init中的函数。在这里会梯度爆炸
-                m.weight.data.normal_(0, 0.01)    # # math.sqrt(2. / n)
+                m.weight.data.normal_(0, 0.001)    # # math.sqrt(2. / n)
                 # torch.nn.init.uniform_(tensorx)
                 # bias都初始化为0
                 if m.bias is not None:  # 当有BN层时，卷积层Con不加bias！
@@ -134,7 +135,9 @@ class PoseNet(nn.Module):
                 m.bias.data.zero_()
 
             elif isinstance(m, nn.Linear):
-                torch.nn.init.normal_(m.weight.data, 0, 0.01)  # m.weight.data.normal_(0, 0.01) m.bias.data.zero_()
+                torch.nn.init.normal_(m.weight.data, 0, 0.01)  # todo: 0.001?
+                # m.weight.data.normal_(0, 0.01)
+                m.bias.data.zero_()
 
 
 class Network(torch.nn.Module):
@@ -167,7 +170,7 @@ class NetworkEval(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False):
         super(NetworkEval, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn, init_weights=False)
 
     def forward(self, inp_imgs):
         # Batch will be divided and Parallel Model will call this forward on every GPU

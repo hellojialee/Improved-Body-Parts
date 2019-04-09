@@ -31,7 +31,7 @@ class TransformationParams:
         self.flip_prob = 0.5
         self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7 当是512输入时是9
-        self.gaussian_thre = 0.01  # 低于此值的gt高斯响应的区域被置零
+        self.gaussian_thre = 0.003  # 低于此值的gt高斯响应的区域被置零
         self.paf_sigma = 7  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
         # the value of sigma is important, there should be an equal contribution between foreground
         # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the

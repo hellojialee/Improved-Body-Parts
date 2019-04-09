@@ -49,11 +49,13 @@ if __name__ == '__main__':  # for debug
             if show_image:
                 show_labels = cv2.resize(labels.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
                 # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-                # mask_offset = cv2.resize(mask_offset.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
-                plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
-                # plt.imshow(offsets[:, :, -1], alpha=0.5)  # mask_all
-                plt.imshow(show_labels[:, :, -7], alpha=0.5)  # mask_all
+                mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
+                mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                # plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
+                # plt.imshow(mask_miss, alpha=0.5)  # mask_all
+                plt.imshow(show_labels[:, :, -1])  # mask_all
                 plt.show()
+                t=2
         print("produce %d samples per second: " % (batch / (time() - start)))
 
     config = GetConfig("Canonical")

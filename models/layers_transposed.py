@@ -9,23 +9,26 @@ import torch.nn.functional as F
 
 
 class Residual(nn.Module):
-    """Residual Block for original Hourglass Network"""
+    """Residual Block modified by us"""
 
     def __init__(self, ins, outs):
         super(Residual, self).__init__()
         self.convBlock = nn.Sequential(
-            nn.BatchNorm2d(ins),
-            nn.LeakyReLU(negative_slope=0.01, inplace=True),
-            nn.Conv2d(ins, outs//2, 1),
+            nn.Conv2d(ins, outs//2, 1, bias=False),
             nn.BatchNorm2d(outs//2),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
-            nn.Conv2d(outs // 2, outs // 2, 3, 1, 1),
+            nn.Conv2d(outs // 2, outs // 2, 3, 1, 1, bias=False),
             nn.BatchNorm2d(outs // 2),
             nn.LeakyReLU(negative_slope=0.01, inplace=True),
-            nn.Conv2d(outs // 2, outs, 1)
+            nn.Conv2d(outs // 2, outs, 1, bias=False),
+            nn.BatchNorm2d(outs),
         )
         if ins != outs:
-            self.skipConv = nn.Conv2d(ins, outs, 1)
+            self.skipConv = nn.Sequential(
+                nn.Conv2d(ins, outs, 1, bias=False),
+                nn.BatchNorm2d(outs)
+            )
+        self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         self.ins = ins
         self.outs = outs
 
@@ -35,6 +38,7 @@ class Residual(nn.Module):
         if self.ins != self.outs:
             residual = self.skipConv(residual)
         x += residual
+        x = self.relu(x)
         return x
 
 
@@ -72,7 +76,7 @@ class Backbone(nn.Module):
         self.nFeat = nFeat
         self.resBlock = resBlock
         self.inplanes = inplanes
-        self.conv1 = nn.Conv2d(self.inplanes, 64, kernel_size=7, stride=2, padding=3)
+        self.conv1 = nn.Conv2d(self.inplanes, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
         self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)
         self.res1 = self.resBlock(64, 128)
@@ -109,17 +113,29 @@ class Hourglass(nn.Module):
         self.upsample = nn.Upsample(scale_factor=2, mode='nearest')  # no learning parameters  # FIXME: 改成反卷积？
 
     def _make_single_residual(self, depth_id):
-        # the innermost conve layer, return as an element
+        # the innermost conve layer, return as a layer item
         return self.resBlock(self.nFeat + self.increase * (depth_id + 1), self.nFeat + self.increase * (depth_id + 1),
-                             bn=self.bn)
+                             bn=self.bn)                            # ###########  Index: 6
 
     def _make_lower_residual(self, depth_id):
         # return as a list
-        return [self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id, bn=self.bn),
-                self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * (depth_id + 1),
-                              bn=self.bn),
-                self.resBlock(self.nFeat + self.increase * (depth_id + 1), self.nFeat + self.increase * depth_id,
-                              bn=self.bn)]
+        pack_layers = [self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
+                                     bn=self.bn, relu=False),                                     # ######### Index: 0
+                       self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * (depth_id + 1),
+                                                                                                  # ######### Index: 1
+                                     bn=self.bn),
+                       self.resBlock(self.nFeat + self.increase * (depth_id + 1), self.nFeat + self.increase * depth_id,
+                                                                                                   # ######### Index: 2
+                                     bn=self.bn),
+                       self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
+                                                                                                   # ######### Index: 3
+                                     bn=self.bn),
+                       self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
+                                                                                                   # ######### Index: 4
+                                     bn=self.bn, relu=False),
+                       nn.LeakyReLU(negative_slope=0.01, inplace=True)                              # ######### Index: 5
+                       ]
+        return pack_layers
 
     def _make_hour_glass(self):
         """
@@ -147,7 +163,7 @@ class Hourglass(nn.Module):
         low1 = self.downsample(x)
         low1 = self.hg[depth_id][1](low1)
         if depth_id == (self.depth - 1):  # except for the highest-order hourglass block
-            low2 = self.hg[depth_id][3](low1)
+            low2 = self.hg[depth_id][6](low1)
         else:
             # call the lower-order hourglass block recursively
             low2 = self._hour_glass_forward(depth_id + 1, low1, up_fms)
@@ -157,7 +173,11 @@ class Hourglass(nn.Module):
         # if depth_id < self.depth - 1:
         #     self.up_fms.append(low2)
         up2 = self.upsample(low3)
-        return up1 + up2
+        deconv1 = self.hg[depth_id][3](up2)
+        deconv2 = self.hg[depth_id][4](deconv1)
+        up1 += deconv2
+        out = self.hg[depth_id][5](up1)  # relu after residual add
+        return out
 
     def forward(self, x):
         """

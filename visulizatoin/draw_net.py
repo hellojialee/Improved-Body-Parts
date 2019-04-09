@@ -59,7 +59,7 @@ def make_dot(var, params=None):
 if __name__ == '__main__':
 
     # output the shape of of every layers' feature maps
-    from models.layers import Conv, Residual, Hourglass, SELayer
+    from models.layers_transposed import Conv, Residual, Hourglass, SELayer
     from models.posenet import PoseNet, NetworkEval
     from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 
@@ -87,21 +87,21 @@ if __name__ == '__main__':
     # ##############################################################3
 
     import torch.onnx
-    net = Hourglass(4, 256, 128, resBlock=Conv)
+    net = Hourglass(4, 256, 128, resBlock=Conv, bn=True)
     dummy_input = torch.randn(1, 256, 128, 128)
     torch.onnx.export(net, dummy_input, "hourglass.onnx")
 
-    se = SELayer(256)
-    dummy_input = torch.randn(8, 256, 128, 128)
-    torch.onnx.export(se, dummy_input, "SElayer.onnx")
-
+    # se = SELayer(256)
+    # dummy_input = torch.randn(8, 256, 128, 128)
+    # torch.onnx.export(se, dummy_input, "SElayer.onnx")
+    #
     opt = TrainingOpt()
     config = GetConfig(opt.config_name)
-    pose = NetworkEval(opt, config, bn=False)
+    pose = NetworkEval(opt, config, bn=True)
     pose.eval()
     dummy_input = torch.randn(1, 384, 384, 3)
     y = pose(dummy_input)
-    # netron --host=localhost --port=8080
+    # ############################# netron --host=localhost --port=8080
     torch.onnx.export(pose, dummy_input, "posenet.onnx")
     # export onnx for the second time to check the model
     torch.onnx.export(pose, dummy_input, "posenet2.onnx")
