@@ -30,7 +30,7 @@ def config_reader():
     param['mid_num'] = int(param['mid_num'])
     param['min_num'] = int(param['min_num'])
     param['len_rate'] = float(param['len_rate'])
-    param['offset_box'] = int(param['offset_box'])
+    param['offset_radius'] = int(param['offset_radius'])
     param['crop_ratio'] = float(param['crop_ratio'])
     param['bbox_ratio'] = float(param['bbox_ratio'])
     param['GPUdeviceNumber'] = int(param['GPUdeviceNumber'])

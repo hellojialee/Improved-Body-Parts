@@ -21,39 +21,22 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
-limbSeq = [[1, 0], [1, 14], [1, 15], [1, 16], [1, 17], [0, 14], [0, 15], [14, 16], [15, 17],
-           [1, 2], [2, 3], [3, 4], [1, 5], [5, 6], [6, 7], [1, 8], [8, 9],
-           [9, 10], [1, 11], [11, 12], [12, 13], [8, 11], [2, 16], [5, 17]]
-
-
-mapIdx = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15], [16, 17], [18, 19], [20, 21], [22, 23],
-          [24, 25], [26, 27], [28, 29], [30, 31], [32, 33], [34, 35], [36, 37], [38, 39], [40, 41], [42, 43], [44, 45],
-          [46, 47]]
-
-# Visualize
+# For visualize
 colors = [[	128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [255, 0, 0], [255, 85, 0], [255, 170, 0],
           [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255],
           [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 170],
           [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255]]
 
-dt_gt_mapping = {0: 0, 1: None, 2: 6, 3: 8, 4: 10, 5: 5, 6: 7, 7: 9, 8: 12, 9: 14, 10: 16, 11: 11, 12: 13, 13: 15,
-                 14: 2, 15: 1, 16: 4, 17: 3}  # , 18: None 没有使用肚脐
-
-# For the flip augmentation
-flip_heat_ord = np.array([0, 1, 5, 6, 7, 2, 3, 4, 11, 12, 13, 8, 9, 10, 15, 14, 17, 16, 18, 19])
-flip_paf_ord = np.array([0, 2, 1, 4, 3, 6, 5, 8, 7, 12, 13, 14, 9, 10, 11, 18, 19, 20, 15, 16, 17, 21, 23, 22])
-
 
 torch.cuda.empty_cache()
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
-parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/v1.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/paper1.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -62,16 +45,24 @@ parser.add_argument('--loss-scale', type=str, default=None)
 
 args = parser.parse_args()
 
-checkpoint_path = args.checkpoint_path
+# ###################################  Setup for some configurations ###########################################
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
+
+
+limbSeq = config.limbs_conn
+dt_gt_mapping = config.dt_gt_mapping
+flip_heat_ord = config.flip_heat_ord
+flip_paf_ord = config.flip_paf_ord
+draw_list = config.draw_list
+# ###############################################################################################################
 
 
 def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 3], 1.5 * paf_avg[:, :, 3])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 13], 1.5 * paf_avg[:, :, 13])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -85,7 +76,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     # 最后，将生成好的HSV图像转换为BGR颜色空间
     limb_flow = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
-    plt.imshow(oriImg[:, :, [2, 1, 0]])
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])
     plt.imshow(limb_flow, alpha=.5)
     plt.show()
 
@@ -193,6 +184,13 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
     filter_map = heatmap_avg[:, :, :18].copy().transpose((2, 0, 1))[None, ...]
     filter_map = torch.from_numpy(filter_map).cuda()
+
+    # # #######################   Add Gaussian smooth  #######################
+    # smoothing = util.GaussianSmoothing(18, 7, 1)
+    # filter_map = F.pad(filter_map, (3, 3, 3, 3), mode='reflect')
+    # filter_map = smoothing(filter_map)
+    # # ######################################################################
+
     filter_map = util.keypoint_heatmap_nms(filter_map, kernel=3, thre=params['thre1'])
     filter_map = filter_map.cpu().numpy().squeeze().transpose((1, 2, 0))
 
@@ -206,12 +204,14 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))
         # note reverse. xy坐标系和图像坐标系
         # np.nonzero: Return the indices of the elements that are non-zero
-        # TODO: 添加加权坐标计算，根据不同类型关键点弥散程度不同选择加权的范围
-        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]  # 列表解析式，生产的是list
+        # 添加加权坐标计算，根据不同类型关键点弥散程度不同选择加权的范围
+        refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
+
+        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in refined_peaks]  # 列表解析式，生产的是list
         # [(205, 484, 0.9319216758012772),
         #  # (595, 484, 0.777797631919384),
 
-        id = range(peak_counter, peak_counter + len(peaks))
+        id = range(peak_counter, peak_counter + len(refined_peaks))
         peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
         # 为每一个相应peak (parts)都依次编了一个号
 
@@ -220,7 +220,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # [(205, 484, 0.9319216758012772, 25),
         # (595, 484, 0.777797631919384, 26),
         # (343, 490, 0.8145177364349365, 27), ....
-        peak_counter += len(peaks)
+        peak_counter += len(refined_peaks)
 
     # --------------------------------------------------------------------------------------- #
     # ####################################################################################### #
@@ -231,9 +231,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     connection_all = []
     special_k = []
 
-    # 有多少个limb,就有多少个connection,相对应地就有多少个paf指向
-    for k in range(len(mapIdx)):  # 最外层的循环是某一个limbSeq，因为mapIdx个数与之是一致对应的
-        score_mid = paf_avg[:, :, mapIdx[k][0] // 2]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
+    # 有多少个limb,就有多少个connection,相对应地就有多少个paf channel
+    for k in range(len(limbSeq)):  # 最外层的循环是某一个limbSeq
+        score_mid = paf_avg[:, :, k]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
         # score_mid = gaussian_filter(orginal_score_mid, sigma=3)  fixme: use gaussisan blure?
         candA = all_peaks[limbSeq[k][0]]  # all_peaks是list,每一行也是一个list,保存了检测到的特定的parts(joints)
         # 注意具体处理时标号从0还是1开始。从收集的peaks中取出某类关键点（part)集合
@@ -310,7 +310,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # candidate[:, 2] *= 0.5  # FIXME: change it? part confidence * 0.5
     # candidate.shape = (94, 4). 列表解析式，两层循环，先从all peaks取，再从sublist中取。 all peaks是两层list
 
-    for k in range(len(mapIdx)):
+    for k in range(len(limbSeq)):
         # ---------------------------------------------------------
         # 外层循环limb  对应论文中，每一个limb就是一个子集，分limb处理,贪心策略?
         # special_K ,表示没有找到关节点对匹配的肢体
@@ -471,8 +471,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                 #    4.Repeat the step 3 until we are done.
                 # 说明见：　https://arvrjourney.com/human-pose-estimation-using-openpose-with-tensorflow-part-2-e78ab9104fc8
 
-                elif not found and k < 24:
-                    # Fixme: 原始的时候是18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
+                elif not found and k < len(limbSeq):
+                    # Fixme: 检查一下是否正确
+                    #  原始的时候是 k<18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
                     #  但是后面画limb的时候没有把鼻子和眼睛耳朵的连线画上，要改进
                     row = -1 * np.ones((20, 2))
                     row[indexA][0] = partAs[i]
@@ -528,9 +529,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     #         # 注意x,y坐标谁在前谁在后，在这个project中有点混乱
     #         cv2.circle(canvas, all_peaks[i][j][0:2], 3, colors[i], thickness=-1)
 
-    stickwidth = 3
     # 画所有的骨架
-    draw_list = [0] + list(range(5, 22))
+    color_board = [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
+    color_idx = 0
     for i in draw_list:  # 画出18个limb　Fixme：我设计了25个limb,画的limb顺序需要调整，相应color数也要增加
         for n in range(len(subset)):
             index = subset[n][np.array(limbSeq[i])][..., 0]
@@ -549,9 +550,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
             cv2.circle(cur_canvas, (int(Y[0]), int(X[0])), 4, color=[0, 0, 0], thickness=2)
             cv2.circle(cur_canvas, (int(Y[1]), int(X[1])), 4, color=[0, 0, 0], thickness=2)
-
-            cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
+            cv2.fillConvexPoly(cur_canvas, polygon, colors[color_board[color_idx]])
             canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
+        color_idx += 1
     return canvas
 
 

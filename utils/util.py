@@ -135,7 +135,7 @@ class GaussianSmoothing(nn.Module):
         Returns:
             filtered (torch.Tensor): Filtered output.
         """
-        return self.conv(input, weight=self.weight, groups=self.groups)
+        return self.conv(input, weight=self.weight.cuda(), groups=self.groups)
 
 
 def keypoint_heatmap_nms(heat, kernel=3, thre=0.1):
@@ -145,3 +145,30 @@ def keypoint_heatmap_nms(heat, kernel=3, thre=0.1):
     hmax = F.max_pool2d(pad_heat, (kernel, kernel), stride=1, padding=0)
     keep = (hmax == heat).float() * (heat >= thre).float()
     return heat * keep
+
+
+def refine_centroid(scorefmp, anchor, radius):
+    """
+    Refine the centroid coordinate
+    :param scorefmp: 2-D numpy array, original regressed score map
+    :param anchor: python tuple, (x,y) coordinates
+    :param radius: int, range of considered scores
+    :return: refined anchor
+    """
+    x_c, y_c = anchor
+    x_min = x_c - radius
+    x_max = x_c + radius + 1
+    y_min = y_c - radius
+    y_max = y_c + radius + 1
+
+    if y_max > scorefmp.shape[0] or y_min < 0 or x_max > scorefmp.shape[1] or x_min < 0:
+        return anchor
+
+    score_box = scorefmp[y_min:y_max, x_min:x_max]
+    x_grid, y_grid = np.mgrid[-radius:radius+1, -radius:radius+1]
+    offset_x = (score_box * x_grid).sum() / score_box.sum()
+    offset_y = (score_box * y_grid).sum() / score_box.sum()
+    x_refine = int(np.rint(x_c + offset_x))
+    y_refine = int(np.rint(y_c + offset_y))
+    refined_anchor = (x_refine, y_refine)
+    return refined_anchor

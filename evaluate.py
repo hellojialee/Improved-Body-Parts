@@ -7,6 +7,7 @@ from scipy.ndimage.filters import gaussian_filter
 import tqdm
 import cv2
 import torch
+import torch.nn.functional as F
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from utils.config_reader import config_reader
@@ -19,17 +20,9 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "3"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
-# the middle joints heatmap correpondence
-limbSeq = [[1, 0], [1, 14], [1, 15], [1, 16], [1, 17], [0, 14], [0, 15], [14, 16], [15, 17],
-           [1, 2], [2, 3], [3, 4], [1, 5], [5, 6], [6, 7], [1, 8], [8, 9],
-           [9, 10], [1, 11], [11, 12], [12, 13], [8, 11], [2, 16], [5, 17]]
-
-mapIdx = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15], [16, 17], [18, 19], [20, 21], [22, 23],
-          [24, 25], [26, 27], [28, 29], [30, 31], [32, 33], [34, 35], [36, 37], [38, 39], [40, 41], [42, 43], [44, 45],
-          [46, 47]]
 
 # visualize
 colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
@@ -37,22 +30,12 @@ colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0]
           [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255],
           [128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255]]
 
-# 因为CMU的定义和COCO官方对joint编号的定义不相同，所以需要通过mapping把编号改过来　　
-#  TODO: when evaluation, change the keypoint id mapping!! Because we use different ids compared with MSCOCO dataset!
-dt_gt_mapping = {0: 0, 1: None, 2: 6, 3: 8, 4: 10, 5: 5, 6: 7, 7: 9, 8: 12, 9: 14, 10: 16, 11: 11, 12: 13, 13: 15,
-                 14: 2, 15: 1, 16: 4, 17: 3, 18: None}
-
-# For the flip augmentation
-flip_heat_ord = np.array([0, 1, 5, 6, 7, 2, 3, 4, 11, 12, 13, 8, 9, 10, 15, 14, 17, 16, 18, 19])
-flip_paf_ord = np.array([0, 2, 1, 4, 3, 6, 5, 8, 7, 12, 13, 14, 9, 10, 11, 18, 19, 20, 15, 16, 17, 21, 23, 22])
-
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/v1.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -61,9 +44,16 @@ parser.add_argument('--loss-scale', type=str, default=None)
 
 args = parser.parse_args()
 
-checkpoint_path = args.checkpoint_path
+# ###################################  Setup for some configurations ###########################################
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
+
+
+limbSeq = config.limbs_conn
+dt_gt_mapping = config.dt_gt_mapping
+flip_heat_ord = config.flip_heat_ord
+flip_paf_ord = config.flip_paf_ord
+# ###############################################################################################################
 
 
 def predict(image, params, model, model_params, heat_layers, paf_layers, input_image_path):
@@ -122,16 +112,24 @@ def find_peaks(heatmap_avg, params):
 
     filter_map = heatmap_avg[:, :, :18].copy().transpose((2, 0, 1))[None, ...]
     filter_map = torch.from_numpy(filter_map).cuda()
+
+    # # #######################   Add Gaussian smooth will be bad #######################
+    # smoothing = util.GaussianSmoothing(18, 7, 1.2)
+    # filter_map = F.pad(filter_map, (3, 3, 3, 3), mode='reflect')
+    # filter_map = smoothing(filter_map)
+    # # ######################################################################
+
     filter_map = util.keypoint_heatmap_nms(filter_map, kernel=3, thre=params['thre1'])
     filter_map = filter_map.cpu().numpy().squeeze().transpose((1, 2, 0))
 
     for part in range(18):
         map_ori = heatmap_avg[:, :, part]
-        # map = gaussian_filter(map_ori, sigma=3)  # TODO: fintune the sigma
+        # heatmap_avg = gaussian_filter(heatmap_avg, sigma=3)  # TODO: fintune the sigma
         # 在某些情况下，需要对一个像素的周围的像素给予更多的重视。因此，可通过分配权重来重新计算这些周围点的值。
         # 这可通过高斯函数（钟形函数，即喇叭形数）的权重方案来解决。
         peaks_binary = filter_map[:, :, part]
         peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))  # note reverse
+        # refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
         peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
         id = range(peak_counter, peak_counter + len(peaks))
         peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
@@ -147,8 +145,8 @@ def find_connections(all_peaks, paf_avg, image_width, params):
     special_k = []
 
     # 有多少个limb,就有多少个connection,相对应地就有多少个paf指向
-    for k in range(len(mapIdx)):  # 最外层的循环是某一个limbSeq，因为mapIdx个数与之是一致对应的
-        score_mid = paf_avg[:, :, mapIdx[k][0] // 2]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
+    for k in range(len(limbSeq)):  # 最外层的循环是某一个limbSeq，因为mapIdx个数与之是一致对应的
+        score_mid = paf_avg[:, :, k]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
         # score_mid = gaussian_filter(score_mid, sigma=3)
         candA = all_peaks[limbSeq[k][0]]  # all_peaks是list,每一行也是一个list,保存了检测到的特定的parts(joints)
         # 注意具体处理时标号从0还是1开始。从收集的peaks中取出某类关键点（part)集合
@@ -222,7 +220,7 @@ def find_people(connection_all, special_k, all_peaks, params):
     candidate = np.array([item for sublist in all_peaks for item in sublist])
     # candidate.shape = (94, 4). 列表解析式，两层循环，先从all peaks取，再从sublist中取。 all peaks是两层list
 
-    for k in range(len(mapIdx)):
+    for k in range(len(limbSeq)):
         # ---------------------------------------------------------
         # 外层循环limb  对应论文中，每一个limb就是一个子集，分limb处理,贪心策略?
         # special_K ,表示没有找到关节点对匹配的肢体
@@ -389,8 +387,9 @@ def find_people(connection_all, special_k, all_peaks, params):
                 #    4.Repeat the step 3 until we are done.
                 # 说明见：　https://arvrjourney.com/human-pose-estimation-using-openpose-with-tensorflow-part-2-e78ab9104fc8
 
-                elif not found and k < 24:
-                    # Fixme: 原始的时候是18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
+                elif not found and k < len(limbSeq):
+                    # Fixme: 检查是否正确
+                    #  原始的时候是18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
                     # FIXME: 但是后面画limb的时候没有把鼻子和眼睛耳朵的连线画上，要改进
                     row = -1 * np.ones((20, 2))
                     row[indexA][0] = partAs[i]
@@ -408,7 +407,7 @@ def find_people(connection_all, special_k, all_peaks, params):
     # delete some rows of subset which has few parts occur
     deleteIdx = []
     for i in range(len(subset)):
-        if subset[i][-1][0] < 2 or subset[i][-2][0] / subset[i][-1][0] < 0.45:   # subset[i][-1][0] < 4 or  todo: 一些预知需要调整，并且coco更侧重检测到而不是虚警
+        if subset[i][-1][0] < 2 or subset[i][-2][0] / subset[i][-1][0] < 0.45:   # subset[i][-1][0] < 4 or  FIXME: 一些预知需要调整，并且coco更侧重检测到而不是虚警
             deleteIdx.append(i)
     subset = np.delete(subset, deleteIdx, axis=0)
 
@@ -466,7 +465,8 @@ def predict_many(coco, images_directory, validation_ids, params, model, model_pa
 
 def format_results(keypoints, resFile):
     format_keypoints = []
-    # todo: do we need to sort the detections by scores before evaluation ?
+    # Question: do we need to sort the detections by scores before evaluation ?
+    # -- I think we do not have. COCO will select the top 20 automatically
     for image_id, people in keypoints.items():
         for keypoint_list, score in people:
             format_keypoint_list = []
@@ -498,15 +498,15 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     cocoGt = COCO(annFile)
 
     if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds()  # [:100] 在这里可以设置validate图片的大小
+        validation_ids = cocoGt.getImgIds()[:1000]  # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
-    # # #############################################################################
+    # #############################################################################
     # # 在test数据集上测试代码
-    # annFile = '../dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
     # cocoGt = COCO(annFile)
     # validation_ids = cocoGt.getImgIds()
-    # # #############################################################################
+    # #############################################################################
 
     resFile = '%s/results/%s_%s_%s100_results.json'
     resFile = resFile % (dataDir, prefix, dataset, dump_name)
@@ -546,7 +546,7 @@ if __name__ == "__main__":
     params, model_params = config_reader()
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='my_test_hourglass', dataset='val2017')  # val2017
+        eval_result_original = validation(posenet, dump_name='my_test_hourglass_focal_0.25', dataset='val2017')  # 'val2017'
 
     print('over!')
 

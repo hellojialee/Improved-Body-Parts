@@ -44,11 +44,12 @@ class Residual(nn.Module):
 
 class Conv(nn.Module):
     # conv block used in hourglass
-    def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=False, relu=True):
+    def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=False, relu=True, dropout=False):
         super(Conv, self).__init__()
         self.inp_dim = inp_dim
         self.relu = None
         self.bn = None
+        self.dropout = dropout
         if relu:
             self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)  # 换成 Leak Relu减缓神经元死亡现象
         if bn:
@@ -62,6 +63,10 @@ class Conv(nn.Module):
         # examine the input channel equals the conve kernel channel
         assert x.size()[1] == self.inp_dim, "input channel {} dese not fit kernel channel {}".format(x.size()[1],
                                                                                                      self.inp_dim)
+        if self.dropout:  # comment these two lines if we do not want to use Dropout layers
+            # p: probability of an element to be zeroed
+            x = F.dropout(x, p=0.2, training=self.training, inplace=False)  # 直接注释掉这一行，如果我们不想使用Dropout
+
         x = self.conv(x)
         if self.bn is not None:
             x = self.bn(x)

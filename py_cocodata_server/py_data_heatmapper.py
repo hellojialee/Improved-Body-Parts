@@ -21,8 +21,10 @@ class Heatmapper:
         self.sigma = config.transform_params.sigma
         self.paf_sigma = config.transform_params.paf_sigma
         self.double_sigma2 = 2 * self.sigma * self.sigma
-        self.gaussian_thre = config.transform_params.gaussian_thre  # set responses lower than gaussian_thre to 0
-        self.gaussian_size = ceil((sqrt(-self.double_sigma2 * log(self.gaussian_thre))) / config.stride) * 2
+        # set responses lower than gaussian_thre to 0
+        self.keypoint_gaussian_thre = config.transform_params.keypoint_gaussian_thre
+        self.limb_gaussian_thre = config.transform_params.limb_gaussian_thre
+        self.gaussian_size = ceil((sqrt(-self.double_sigma2 * log(self.keypoint_gaussian_thre))) / config.stride) * 2
         self.offset_size = self.gaussian_size // 2 + 1  # + 1  # offset vector range
         self.thre = config.transform_params.paf_thre
 
@@ -211,7 +213,7 @@ class Heatmapper:
             slice_y = slice(min_sy, max_sy + 1)
             # tt = self.X[slice_y,slice_x]
             dist = distances(self.X[slice_y, slice_x], self.Y[slice_y, slice_x], self.paf_sigma, x1, y1, x2, y2,
-                             self.gaussian_thre)
+                             self.limb_gaussian_thre)
             # 这里求的距离是在原始尺寸368*368的尺寸，而不是缩小8倍后在46*46上的距离，然后放到46*46切片slice的位置上去
             # print(dist.shape)
             heatmaps[slice_y, slice_x, layer][dist > 0] += dist[dist > 0]  # = dist * dx　若不做平均，则不进行累加
@@ -318,7 +320,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     # oncurve_dist = b * np.sqrt(1 - np.square(ratio * 2))  # oncurve_dist计算的是椭圆边界上的点到长轴的垂直距离
 
     guass_dist = gaussian(sigma, dist, 0)
-    guass_dist[guass_dist <= thresh] = thresh  # 同前面的关键点响应，太远的不要
+    guass_dist[guass_dist <= thresh] = 0  # 同前面的关键点响应，太远的不要
     # b = thre
     # guass_dist[dist >= b] = 0
 

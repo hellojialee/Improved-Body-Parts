@@ -7,6 +7,7 @@ from torch import nn
 from models.layers_transposed import Conv, Hourglass, SELayer, Backbone
 from models.loss_model_parallel import MultiTaskLossParallel
 from models.loss_model import MultiTaskLoss
+from torchvision.models import densenet
 
 
 class Merge(nn.Module):
@@ -28,8 +29,8 @@ class Features(nn.Module):
         super(Features, self).__init__()
         # Regress 5 different scales of heatmaps per stack
         self.before_regress = nn.ModuleList(
-            [nn.Sequential(Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn),
-                           Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn),
+            [nn.Sequential(Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=True),
+                           Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=True),
                            ) for i in range(5)])
 
     def forward(self, fms):

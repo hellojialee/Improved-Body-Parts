@@ -34,12 +34,14 @@ parser.add_argument('--max_grad_norm', default=10, type=float,
                           "re-normalize it to have the norm equal to max_grad_norm"))
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
-parser.add_argument('--opt-level', type=str, default='O0')
+parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
 
+
+# ###################################  Setup for some configurations ###########################################
 torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
 use_cuda = torch.cuda.is_available()
 
@@ -97,7 +99,7 @@ model.cuda()
 #    nesterov = True
 optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
-scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=15, gamma=0.4, last_epoch=-1)
+# scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.4, last_epoch=-1)
 
 
 # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
@@ -118,7 +120,7 @@ if args.distributed:
     # DDP模块同时也计算整体的平均梯度, 这样我们就不需要在训练步骤计算平均梯度。
     model = DDP(model, delay_allreduce=True)
 
-
+# ###################################  Resume from checkpoint ###########################################
 if args.resume:
     # Use a local scope to avoid dangling references
     # dangling references: a variable that refers to an object that was deleted prematurely
@@ -155,7 +157,7 @@ if args.resume:
             global best_loss, start_epoch  # global declaration. otherwise best_loss and start_epoch can not be changed
             # best_loss = checkpoint['train_loss']
             print('******************** Best loss resumed is :', best_loss, '  ************************')
-            start_epoch = checkpoint['epoch'] + 1
+            # start_epoch = checkpoint['epoch'] + 1
             print("========> Resume and start training from Epoch {} ".format(start_epoch))
             del checkpoint
         else:
@@ -185,28 +187,29 @@ for param in model.parameters():
         break
 
 
-#  Update the learning rate for start_epoch times
-for i in range(start_epoch):
-    scheduler.step()
+# #  Update the learning rate for start_epoch times
+# for i in range(start_epoch):
+#     scheduler.step()
 
 
 def train(epoch):
     print('\n ############################# Train phase, Epoch: {} #############################'.format(epoch))
+    torch.cuda.empty_cache()  # fixme: 这样可以吗？
     model.train()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     if args.distributed:
         train_sampler.set_epoch(epoch)
-    # train_loss = 0
-    scheduler.step()
-    print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
+    # scheduler.step()  use 'adjust learning rate' instead
+    # print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
 
     batch_time = AverageMeter()
     losses = AverageMeter()
     end = time.time()
 
     for batch_idx, target_tuple in enumerate(train_loader):
-        # # ##############  adjust learning rate #####################
-        # adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader))
+        # # ##############  Use schedule step or fun of 'adjust learning rate' #####################
+        adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader), use_warmup=True)
+        # print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
         # # ##########################################################
         if use_cuda:
             #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
@@ -343,17 +346,17 @@ def test(epoch):
 
 
 def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
-    factor = epoch // 30
+    factor = epoch // 6
 
     if epoch >= 80:
         factor = factor + 1
 
-    lr = args.lr*(0.1**factor)
+    lr = opt.learning_rate * args.world_size * (0.4**factor)
 
     """Warmup"""
     if use_warmup:
         if epoch < 5:
-            lr = lr*float(1 + step + epoch*len_epoch)/(5.*len_epoch)  # len_epoch=len(train_loader)
+            lr = lr * float(1 + step + epoch * len_epoch) / (5. * len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):
     #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))

@@ -136,10 +136,10 @@ class MultiTaskLoss(nn.Module):
         # eps = 1e-8  # 1e-12
         # s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
         mask = mask_miss.expand_as(sxing).clone()  # type: torch.Tensor
-        mask[:, :, -2, :, :] = multi_task_weight  # except for person mask channel
         del mask_miss
+        mask[:, :, -2, :, :] = multi_task_weight  # except for person mask channel
 
-        st = torch.where(torch.ge(sxing, 0.01), s, 1 - s)
+        st = torch.where(torch.ge(sxing, 0.008), s, 1 - s)  # 0.01
         factor = (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
         out = (s - sxing) ** 2 * factor * mask  # type: torch.Tensor
@@ -148,7 +148,7 @@ class MultiTaskLoss(nn.Module):
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
-        loss = sum(weight_loss) / sum(nstack_weight)
+        loss = sum(weight_loss) / sum(nstack_weight) * 4  # *10 to expand the loss
         return loss
 
 

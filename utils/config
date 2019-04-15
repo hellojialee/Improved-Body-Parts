@@ -13,7 +13,7 @@ modelID = 1
 octave = 3
 starting_range = 0.8
 ending_range = 2
-scale_search = 0.3, 0.8, 1.2, 1.8, 2.5, 3, 4 # 0.5, 1, 2, 4 # 0.3, 0.8, 1.5, 2.5, 4 #
+scale_search =  0.5, 1, 2, 4 # 0.3, 0.8, 1.5, 2.5, 4 # 0.3, 0.8, 1.2, 1.8, 2.5, 3, 4 #
 thre1 = 0.1  # keypoint threshold
 thre2 = 0.1 # limb threshold
 thre3 = 0.5
@@ -24,7 +24,7 @@ len_rate = 20  # 允许的新加入的limb最大长度倍数
 connection_tole = 0.8 # the tolerance of merging the disjoint persons
 crop_ratio = 2.5
 bbox_ratio = 0.25
-offset_box = 16  # 计算加权的亚像素坐标值采样框的范围，以score最大值处为锚点anchor
+offset_radius = 7  # 计算加权的亚像素坐标值采样框的范围，以score最大值处为锚点anchor
 
 [models]
 ## don't edit this part
