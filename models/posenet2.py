@@ -13,9 +13,9 @@ from torchvision.models import densenet
 class Merge(nn.Module):
     """Change the channel dimension of the input tensor"""
 
-    def __init__(self, x_dim, y_dim, bn=False):
+    def __init__(self, x_dim, y_dim):
         super(Merge, self).__init__()
-        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)   # TODO: bn = True
+        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=False)  # fixme: bn=False
 
     def forward(self, x):
         return self.conv(x)
@@ -28,17 +28,9 @@ class Features(nn.Module):
     def __init__(self, inp_dim, increase=128, bn=False):
         super(Features, self).__init__()
         # Regress 5 different scales of heatmaps per stack
-
-        # self.before_regress = nn.ModuleList(
-        #             [nn.Sequential(Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=False),
-        #                            Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=False),
-        #
-        #                            ) for i in range(5)])
         self.before_regress = nn.ModuleList(
-            # compress the channel before heatmap regression
-            [nn.Sequential(Conv(inp_dim + i * increase, inp_dim, 1, bn=bn, dropout=False),
-                           Conv(inp_dim, inp_dim, 3, bn=bn, dropout=False),
-                           Conv(inp_dim, inp_dim, 3, bn=bn, dropout=False),
+            [nn.Sequential(Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=False),
+                           Conv(inp_dim + i * increase, inp_dim + i * increase, 3, bn=bn, dropout=False),
                            ) for i in range(5)])
 
     def forward(self, fms):
@@ -70,20 +62,17 @@ class PoseNet(nn.Module):
         self.features = nn.ModuleList([Features(inp_dim, increase=increase, bn=bn) for _ in range(nstack)])
         # predict 5 different scales of heatmpas per stack, keep in mind to pack the list using ModuleList.
         # Notice: nn.ModuleList can only identify Module subclass! Thus, we must pack the inner layers in ModuleList.
-        # TODO: change the outs layers, Conv(inp_dim + j * increase, oup_dim, 1, relu=False, bn=False)
         self.outs = nn.ModuleList(
-            [nn.ModuleList([Conv(inp_dim, oup_dim, 1, relu=False, bn=False) for j in range(5)]) for i in
+            [nn.ModuleList([Conv(inp_dim + j * increase, oup_dim, 1, relu=False, bn=False) for j in range(5)]) for i in
              range(nstack)])
         self.channel_attention = nn.ModuleList(
             [nn.ModuleList([SELayer(inp_dim + j * increase) for j in range(5)]) for i in
              range(nstack)])
-
-        # TODO: change the merge layers, Merge(inp_dim + j * increase, inp_dim + j * increase)
         self.merge_features = nn.ModuleList(
-            [nn.ModuleList([Merge(inp_dim, inp_dim + j * increase, bn=bn) for j in range(5)]) for i in
+            [nn.ModuleList([Merge(inp_dim + j * increase, inp_dim + j * increase) for j in range(5)]) for i in
              range(nstack - 1)])
         self.merge_preds = nn.ModuleList(
-            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase, bn=bn) for j in range(5)]) for i in range(nstack - 1)])
+            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase) for j in range(5)]) for i in range(nstack - 1)])
         self.nstack = nstack
         if init_weights:
             self._initialize_weights()
@@ -158,7 +147,7 @@ class Network(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False, dist=False):
         super(Network, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn, increase=opt.increase)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
         # If we use train_parallel, we implement the parallel loss . And if we use train_distributed,
         # we should use single process loss because each process on these 4 GPUs  is independent
         self.criterion = MultiTaskLoss(opt, config) if dist else MultiTaskLossParallel(opt, config)
@@ -182,8 +171,7 @@ class NetworkEval(torch.nn.Module):
     """
     def __init__(self, opt, config, bn=False):
         super(NetworkEval, self).__init__()
-        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn, init_weights=False,
-                               increase=opt.increase)
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn, init_weights=False)
 
     def forward(self, inp_imgs):
         # Batch will be divided and Parallel Model will call this forward on every GPU

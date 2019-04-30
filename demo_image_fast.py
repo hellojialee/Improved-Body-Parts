@@ -15,13 +15,14 @@ from utils.config_reader import config_reader
 from utils import util
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from models.posenet import NetworkEval
 import warnings
 import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 # For visualize
@@ -36,7 +37,7 @@ parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/paper1.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/ski.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -62,7 +63,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 13], 1.5 * paf_avg[:, :, 13])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 17], 1.5 * paf_avg[:, :, 17])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -76,17 +77,24 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     # 最后，将生成好的HSV图像转换为BGR颜色空间
     limb_flow = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
 
-    # plt.imshow(oriImg[:, :, [2, 1, 0]])
+    plt.imshow(oriImg[:, :, [2, 1, 0]])
     plt.imshow(limb_flow, alpha=.5)
     plt.show()
 
-    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, -2], alpha=.5)
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])
+    plt.imshow(paf_avg[:, :, 18], alpha=.5)
+    plt.show()
+
+    plt.xticks([])
+    plt.yticks([])
+    plt.imshow(heatmap_avg[:, :, -1])
+    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show a keypoint
     plt.show()
 
     # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
     plt.imshow(heatmap_avg[:, :, 11], alpha=.5)
     plt.show()
+    t = 2
 
 
 def process(input_image, params, model_params, heat_layers, paf_layers):
@@ -353,8 +361,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                         subset[j][indexB][0] = partBs[i]  # partBs[i]是limb其中一个端点的id号码
                         subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
-                        subset[j][-1][0] += 1
-                        # last number in each row is the total parts number of that person
+                        subset[j][-1][0] += 1  # last number in each row is the total parts number of that person
 
                         # # subset[j][-2][1]用来记录不包括当前新加入的类型节点时的总体初始置信度，引入它是为了避免下次迭代出现同类型关键点，覆盖时重复相加了置信度
                         # subset[j][-2][1] = subset[j][-2][0]  # 因为是不包括此类节点的初始值，所以只会赋值一次 !!
@@ -383,8 +390,23 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                             subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
 
                             subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
-                    else:
-                        pass
+
+                    #  overlap the reassigned keypoint
+                    #  如果是添加冗余连接的重复的点，用新的更加高的冗余连接概率取代原来连接的相同的关节点的概率
+                    # 这一个改动没啥影响
+                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= connection_all[k][i][2]:
+                        # 否则用当前的limb端点覆盖已经存在的点，并且在这之前，减去已存在关节点的置信度和连接它的limb置信度
+                        if params['len_rate'] * subset[j][-1][1] <= connection_all[k][i][-1]:
+                            continue
+                        # 减去之前的节点置信度和limb置信度
+                        subset[j][-2][0] -= candidate[subset[j][indexB][0].astype(int), 2] + subset[j][indexB][1]
+
+                        # 添加当前节点
+                        subset[j][indexB][0] = partBs[i]
+                        subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
+                        subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
+
+                        subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
 
                 elif found == 2:  # if found 2 and disjoint, merge them (disjoint：不相交)
                     # -----------------------------------------------------
@@ -611,4 +633,13 @@ if __name__ == '__main__':
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.imwrite(output, canvas)
+
+    # pdf = PdfPages(output + '.pdf')
+    # plt.figure()
+    # plt.plot(canvas[:, :, [2, 1, 0]])
+    # plt.tight_layout()
+    # plt.show()
+    # pdf.savefig()
+    # plt.close()
+    # pdf.close()
 

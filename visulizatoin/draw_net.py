@@ -87,21 +87,29 @@ if __name__ == '__main__':
     # ##############################################################3
 
     import torch.onnx
+    from thop import profile
+
     net = Hourglass(4, 256, 128, resBlock=Conv, bn=True)
     dummy_input = torch.randn(1, 256, 128, 128)
     torch.onnx.export(net, dummy_input, "hourglass.onnx")
 
-    # se = SELayer(256)
-    # dummy_input = torch.randn(8, 256, 128, 128)
-    # torch.onnx.export(se, dummy_input, "SElayer.onnx")
+    se = SELayer(256)
+    dummy_input = torch.randn(8, 256, 128, 128)
+    torch.onnx.export(se, dummy_input, "SElayer.onnx")
     #
     opt = TrainingOpt()
     config = GetConfig(opt.config_name)
     pose = NetworkEval(opt, config, bn=True)
     pose.eval()
+
+    # ######################### Visualize the network ##############
     dummy_input = torch.randn(1, 384, 384, 3)
     y = pose(dummy_input)
     # ############################# netron --host=localhost --port=8080
     torch.onnx.export(pose, dummy_input, "posenet.onnx")
-    # export onnx for the second time to check the model
-    torch.onnx.export(pose, dummy_input, "posenet2.onnx")
+    # # export onnx for the second time to check the model
+    # torch.onnx.export(pose, dummy_input, "posenet2.onnx")
+
+    # # ##############  Count the FLOPs of your PyTorch model  ##########################
+    # flops, params = profile(pose, input_size=(1, 256, 192, 3))
+    # print(flops, params)

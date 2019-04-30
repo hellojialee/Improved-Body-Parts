@@ -99,9 +99,9 @@ class Transformer:
         hsv_img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.int16)
         hsv_img[:, :, 0] = np.maximum(np.minimum(hsv_img[:, :, 0] - 10 + np.random.randint(20 + 1), 179),
                                       0)  # hue
-        hsv_img[:, :, 1] = np.maximum(np.minimum(hsv_img[:, :, 1] - 40 + np.random.randint(80 + 1), 255),
+        hsv_img[:, :, 1] = np.maximum(np.minimum(hsv_img[:, :, 1] - 20 + np.random.randint(80 + 1), 255),
                                       0)  # saturation
-        hsv_img[:, :, 2] = np.maximum(np.minimum(hsv_img[:, :, 2] - 30 + np.random.randint(60 + 1), 255),
+        hsv_img[:, :, 2] = np.maximum(np.minimum(hsv_img[:, :, 2] - 20 + np.random.randint(60 + 1), 255),
                                       0)  # value
         hsv_img = hsv_img.astype(np.uint8)
 

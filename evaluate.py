@@ -20,7 +20,7 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 
@@ -129,13 +129,13 @@ def find_peaks(heatmap_avg, params):
         # 这可通过高斯函数（钟形函数，即喇叭形数）的权重方案来解决。
         peaks_binary = filter_map[:, :, part]
         peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))  # note reverse
-        # refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
-        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]
-        id = range(peak_counter, peak_counter + len(peaks))
+        refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
+        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in refined_peaks]
+        id = range(peak_counter, peak_counter + len(refined_peaks))
         peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
 
         all_peaks.append(peaks_with_score_and_id)
-        peak_counter += len(peaks)
+        peak_counter += len(refined_peaks)
 
     return all_peaks
 
@@ -297,6 +297,23 @@ def find_people(connection_all, special_k, all_peaks, params):
                             subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
 
                             subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
+
+                    # overlap the reassigned keypoint with higher score
+                    #  如果是添加冗余连接的重复的点，用新的更加高的冗余连接概率取代原来连接的相同的关节点的概率
+                    # -- 对上面问题的回答： 使用前500进行测试，发现加上这个能提高0.1%，没有什么区别
+                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= connection_all[k][i][2]:
+                        # 否则用当前的limb端点覆盖已经存在的点，并且在这之前，减去已存在关节点的置信度和连接它的limb置信度
+
+                        # 减去之前的节点置信度和limb置信度
+                        subset[j][-2][0] -= candidate[subset[j][indexB][0].astype(int), 2] + subset[j][indexB][1]
+
+                        # 添加当前节点
+                        subset[j][indexB][0] = partBs[i]
+                        subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
+                        subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
+
+                        subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
+
                     else:
                         pass
 
@@ -369,10 +386,10 @@ def find_people(connection_all, special_k, all_peaks, params):
                             big_j = j1
                             remove_c = c2
 
-                        # 删除和当前limb有连接,并且置信度低的那个人的节点
+                        # 删除和当前limb有连接,并且置信度低的那个人的节点   # FIXME:  获取不删除？为了检测更多？
                         subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + \
                                                   subset[small_j][remove_c][1]
-                        subset[small_j][remove_c][0] = -1  # todo
+                        subset[small_j][remove_c][0] = -1
                         subset[small_j][remove_c][1] = -1
                         subset[small_j][-1][0] -= 1
 
@@ -498,7 +515,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     cocoGt = COCO(annFile)
 
     if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds()[:1000]  # [:100] 在这里可以设置validate图片的大小
+        validation_ids = cocoGt.getImgIds()[:200] # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################

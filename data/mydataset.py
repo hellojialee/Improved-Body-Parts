@@ -50,9 +50,10 @@ if __name__ == '__main__':  # for debug
                 show_labels = cv2.resize(labels.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_CUBIC)
                 # offsets = cv2.resize(offsets.transpose((1, 2, 0)), image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 mask_miss = np.repeat(mask_miss.transpose((1, 2, 0)), 3, axis=2)
-                mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
-                # plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
-                plt.imshow(labels.transpose((1, 2, 0))[:,:,30], alpha=0.5)  # mask_all
+                # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
+                image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
+                plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
+                plt.imshow(labels.transpose((1, 2, 0))[:,:,41], alpha=0.5)  # mask_all
                 # plt.imshow(show_labels[:, :, 3], alpha=0.5)  # mask_all
                 plt.show()
                 t=2

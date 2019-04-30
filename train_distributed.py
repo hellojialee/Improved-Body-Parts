@@ -7,6 +7,7 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
+import apex.optimizers as apex_optim
 import torch.distributed as dist
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 from data.mydataset import MyDataset
@@ -98,6 +99,7 @@ model.cuda()
 # fixme: change weight_decay?
 #    nesterov = True
 optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
+# optimizer = optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
 # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.4, last_epoch=-1)
 
@@ -133,31 +135,32 @@ if args.resume:
             from collections import OrderedDict
             new_state_dict = OrderedDict()
             for k, v in checkpoint['weights'].items():
-                # if 'out' in k or 'merge' in k:
-                #     continue
+                # Exclude the regression layer by commenting the following code
+                #if 'out' or 'merge' in k:
+                    #continue
                 name = 'module.' + k  # add prefix 'module.'
                 new_state_dict[name] = v
-            model.load_state_dict(new_state_dict, strict=False)  # , strict=False
+            model.load_state_dict(new_state_dict)  # , strict=False
             # # #################################################
 
             # model.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
             print('Network weights have been resumed from checkpoint...')
 
             optimizer.load_state_dict(checkpoint['optimizer_weight'])
-            # We must convert the resumed state data of optimizer to gpu
-            """It is because the previous training was done on gpu, so when saving the optimizer.state_dict, the stored
-             states(tensors) are of cuda version. During resuming, when we load the saved optimizer, load_state_dict()
-             loads this cuda version to cpu. But in this project, we use map_location to map the state tensors to cpu.
-             In the training process, we need cuda version of state tensors, so we have to convert them to gpu."""
+            # # We must convert the resumed state data of optimizer to gpu
+            # """It is because the previous training was done on gpu, so when saving the optimizer.state_dict, the stored
+            #  states(tensors) are of cuda version. During resuming, when we load the saved optimizer, load_state_dict()
+            #  loads this cuda version to cpu. But in this project, we use map_location to map the state tensors to cpu.
+            #  In the training process, we need cuda version of state tensors, so we have to convert them to gpu."""
             for state in optimizer.state.values():
                 for k, v in state.items():
                     if torch.is_tensor(v):
                         state[k] = v.cuda()
             print('Optimizer has been resumed from checkpoint...')
             global best_loss, start_epoch  # global declaration. otherwise best_loss and start_epoch can not be changed
-            # best_loss = checkpoint['train_loss']
+            best_loss = checkpoint['train_loss']
             print('******************** Best loss resumed is :', best_loss, '  ************************')
-            # start_epoch = checkpoint['epoch'] + 1
+            start_epoch = checkpoint['epoch'] + 1
             print("========> Resume and start training from Epoch {} ".format(start_epoch))
             del checkpoint
         else:
@@ -194,7 +197,7 @@ for param in model.parameters():
 
 def train(epoch):
     print('\n ############################# Train phase, Epoch: {} #############################'.format(epoch))
-    torch.cuda.empty_cache()  # fixme: 这样可以吗？
+    torch.cuda.empty_cache()
     model.train()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
     if args.distributed:
@@ -276,7 +279,7 @@ def train(epoch):
         logger.flush()
         logger.close()
 
-        if losses.avg < best_loss:
+        if losses.avg < float('inf'):  # < best_loss
             # Update the best_loss if the average loss drops
             best_loss = losses.avg
             print('\nSaving model checkpoint...\n')
@@ -346,16 +349,17 @@ def test(epoch):
 
 
 def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
-    factor = epoch // 6
+    factor = epoch // 15
 
-    if epoch >= 80:
-        factor = factor + 1
+    if epoch >= 60:
+        increase = (epoch - 60) // 5
+        factor = factor + increase
 
     lr = opt.learning_rate * args.world_size * (0.4**factor)
 
     """Warmup"""
     if use_warmup:
-        if epoch < 5:
+        if epoch < 3:
             lr = lr * float(1 + step + epoch * len_epoch) / (5. * len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):

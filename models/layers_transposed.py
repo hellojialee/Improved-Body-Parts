@@ -207,7 +207,7 @@ class SELayer(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
                 nn.Linear(inp_dim, inp_dim // reduction),
-                nn.ReLU(inplace=True),
+                nn.LeakyReLU(inplace=True),  # Relu
                 nn.Linear(inp_dim // reduction, inp_dim),
                 nn.Sigmoid())
 

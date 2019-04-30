@@ -4,17 +4,19 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 11  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    batch_size = 8  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
     learning_rate = 2.5e-5  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset384.h5"
     hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset384.h5"
     nstack = 3  # stacked number of hourglass
+    hourglass_inp_dim = 256
+    increase = 128  # increased channels once down-sampling in the hourglass networks
     nstack_weight = [1, 1, 1]  # weight the losses between different stacks, stack 1, stack 2, stack 3...
     scale_weight = [0.2, 0.1, 0.4, 1, 4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
     multi_task_weight = 0.1  # person mask loss vs keypoint loss
-    hourglass_inp_dim = 256
-    ckpt_path = './link2checkpoints_distributed/PoseNet_79_epoch.pth'
+    keypoint_task_weight = 1  # keypoint heatmap loss vs body part heatmap loss
+    ckpt_path = './link2checkpoints_distributed/L2_loss_3_stack/PoseNet_79_epoch.pth'
 
 
 class TransformationParams:
@@ -31,8 +33,8 @@ class TransformationParams:
         self.flip_prob = 0.5  # flip the image to force the network distinguish the mirror symmetrical keypoints
         self.tint_prob = 0.4  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7 当是512输入时是9
-        self.keypoint_gaussian_thre = 0.01  # 低于此值的keypoint gt高斯响应的区域被置零
-        self.limb_gaussian_thre = 0.01  # 低于此值的body part gt高斯响应的区域被置零
+        self.keypoint_gaussian_thre = 0.003  # 低于此值的keypoint gt高斯响应的区域被置零
+        self.limb_gaussian_thre = 0.003  # 低于此值的body part gt高斯响应的区域被置零
         self.paf_sigma = 7  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
         # the value of sigma is important, there should be an equal contribution between foreground
         # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the
