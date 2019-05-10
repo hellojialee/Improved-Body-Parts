@@ -15,7 +15,7 @@ class Merge(nn.Module):
 
     def __init__(self, x_dim, y_dim, bn=False):
         super(Merge, self).__init__()
-        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)   # TODO: bn = True
+        self.conv = Conv(x_dim, y_dim, 1, relu=False, bn=bn)
 
     def forward(self, x):
         return self.conv(x)
@@ -83,7 +83,8 @@ class PoseNet(nn.Module):
             [nn.ModuleList([Merge(inp_dim, inp_dim + j * increase, bn=bn) for j in range(5)]) for i in
              range(nstack - 1)])
         self.merge_preds = nn.ModuleList(
-            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase, bn=bn) for j in range(5)]) for i in range(nstack - 1)])
+            [nn.ModuleList([Merge(oup_dim, inp_dim + j * increase, bn=bn) for j in range(5)]) for i in
+             range(nstack - 1)])
         self.nstack = nstack
         if init_weights:
             self._initialize_weights()

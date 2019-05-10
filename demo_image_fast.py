@@ -37,9 +37,8 @@ parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/ski.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/cocotry.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
-
 parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)
@@ -63,7 +62,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 17], 1.5 * paf_avg[:, :, 17])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 16], 1.5 * paf_avg[:, :, 16])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -81,8 +80,8 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.imshow(limb_flow, alpha=.5)
     plt.show()
 
-    # plt.imshow(oriImg[:, :, [2, 1, 0]])
-    plt.imshow(paf_avg[:, :, 18], alpha=.5)
+    plt.imshow(oriImg[:, :, [2, 1, 0]])
+    plt.imshow(paf_avg[:, :, 11], alpha=.5)
     plt.show()
 
     plt.xticks([])
@@ -91,8 +90,8 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show a keypoint
     plt.show()
 
-    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, 11], alpha=.5)
+    plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
+    plt.imshow(heatmap_avg[:, :, 4], alpha=.5)
     plt.show()
     t = 2
 

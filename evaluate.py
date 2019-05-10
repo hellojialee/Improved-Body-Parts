@@ -20,7 +20,7 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "3"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 
@@ -515,11 +515,11 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     cocoGt = COCO(annFile)
 
     if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds()[:200] # [:100] 在这里可以设置validate图片的大小
+        validation_ids = cocoGt.getImgIds() # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
-    # # 在test数据集上测试代码
+    # 在test数据集上测试代码
     # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
     # cocoGt = COCO(annFile)
     # validation_ids = cocoGt.getImgIds()
@@ -563,7 +563,7 @@ if __name__ == "__main__":
     params, model_params = config_reader()
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='my_test_hourglass_focal_0.25', dataset='val2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='my_4_hourglass_focal_epoch_new_76_', dataset='val2017')  # 'val2017'
 
     print('over!')
 

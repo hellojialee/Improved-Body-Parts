@@ -98,7 +98,7 @@ model.cuda()
 # fixme: add up momentum if the batch grows?
 # fixme: change weight_decay?
 #    nesterov = True
-optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=1e-4)
+optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=2e-4)
 # optimizer = optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
 # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.4, last_epoch=-1)
@@ -351,11 +351,10 @@ def test(epoch):
 def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
     factor = epoch // 15
 
-    if epoch >= 60:
-        increase = (epoch - 60) // 5
-        factor = factor + increase
+    if epoch >= 78:
+        factor = (epoch - 78) // 5
 
-    lr = opt.learning_rate * args.world_size * (0.4**factor)
+    lr = opt.learning_rate * args.world_size * (0.2**factor)
 
     """Warmup"""
     if use_warmup:
