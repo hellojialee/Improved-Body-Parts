@@ -155,6 +155,7 @@ def refine_centroid(scorefmp, anchor, radius):
     :param radius: int, range of considered scores
     :return: refined anchor
     """
+
     x_c, y_c = anchor
     x_min = x_c - radius
     x_max = x_c + radius + 1
@@ -172,3 +173,15 @@ def refine_centroid(scorefmp, anchor, radius):
     y_refine = int(np.rint(y_c + offset_y))
     refined_anchor = (x_refine, y_refine)
     return refined_anchor
+
+
+def set_bn_eval_fp32(m):
+    classname = m.__class__.__name__
+    if classname.find('BatchNorm') != -1:
+      m.eval()
+
+
+def set_bn_eval(m):
+    classname = m.__class__.__name__
+    if classname.find('BatchNorm') != -1:
+      m.eval().half()

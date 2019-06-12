@@ -20,7 +20,7 @@ warnings.filterwarnings("ignore")
 torch.cuda.empty_cache()
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
 parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
@@ -63,7 +63,7 @@ use_cuda = torch.cuda.is_available()  # 判断GPU cuda是否可用
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
 
-posenet = Network(opt, config, dist=False, bn=False)
+posenet = Network(opt, config, dist=False, bn=True)
 posenet.cuda()
 optimizer = optim.SGD(posenet.parameters(), lr=opt.learning_rate, momentum=0.9, weight_decay=1e-4)
 
@@ -141,7 +141,7 @@ def train(epoch):
 
         optimizer.zero_grad()  # zero the gradient buff
 
-        loss_ngpu = posenet(images, target_tuple[1:])  # reduce losses of all GPUs on cuda 0
+        loss_ngpu = posenet(target_tuple)  # reduce losses of all GPUs on cuda 0
         loss = torch.sum(loss_ngpu) / opt.batch_size
         # print(loc_preds.requires_grad)
         # print(conf_preds.requires_grad)
@@ -199,7 +199,7 @@ def test(epoch, show_image=False):
             # loc_targets = Variable(loc_targets)
             # conf_targets = Variable(conf_targets)
 
-            output_tuple, loss_ngpu = posenet(images, target_tuple[1:])
+            output_tuple, loss_ngpu = posenet(target_tuple)
             loss = torch.sum(loss_ngpu) / opt.batch_size
 
             test_loss += loss.item()  # 累加的loss
@@ -227,6 +227,6 @@ def test(epoch, show_image=False):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 200):
-        # train(epoch)
-        test(epoch, show_image=True)
+        train(epoch)
+        # test(epoch, show_image=True)
 

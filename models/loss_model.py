@@ -29,8 +29,7 @@ class MultiTaskLoss(nn.Module):
         [batch,1,128,128], [batch,43,128,128], [batch,36,128,128], [batch,36,128,128]
         :return: scalar tensor
         """
-        # we use 4 stacks, 5 scales
-        # TODO: 是用5个不同scale好还是4个scale监督好？
+        # we use 4 stacks, 5 scales?
         # assert self.batch_size == target_tuple[0].shape[0], 'batch size {} not match'.format(pred_tuple[0].shape[0])
         pred_scale_tensors = [torch.cat([pred_tuple[j][i][None, ...] for j in range(self.nstack)], dim=0) for i in
                               range(5)]  # concatenate the same scale output of different stacks
@@ -47,7 +46,6 @@ class MultiTaskLoss(nn.Module):
         :param target: mask_misses, heatmaps, offsets, mask_offsets of shape (N, C, H, W)
         :return:
         """
-        # TODO： 没有平衡keypoint 和 body part两部分损失，可以在这里把heatmap进一步拆分
         pred_heatmap = pred  # pred[:, :, :self.offset_start]
         # pred_offset = pred[:, :, self.offset_start:]
 
@@ -68,7 +66,7 @@ class MultiTaskLoss(nn.Module):
         # plt.show()
         # #####################################################
 
-        heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...], self.heat_start,
+        heatmap_loss = self.l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...], self.heat_start,
                                     self.bkg_start, nstack_weight=self.nstack_weight,
                                     multi_task_weight=self.multi_task_weight,
                                     keypoint_task_weight=self.keypoint_task_weight)
@@ -80,7 +78,7 @@ class MultiTaskLoss(nn.Module):
         return heatmap_loss
 
     @staticmethod
-    def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):   # TODO: smooth L1 loss
+    def l1_loss(pred, target, mask_offset, nstack_weight=[1, 1, 1, 1]):   # TODO: smooth L1 loss, but CenterNet says no
         """
         Compute the smooth L1 loss of offset feature maps
         :param pred: predicted tensor (nstack, batch, channel, height, width), predicted feature maps
@@ -123,7 +121,7 @@ class MultiTaskLoss(nn.Module):
         # sum over the feature map, should divide by batch afterwards
         # #  loss_nstack = out.sum(dim=(1, 2, 3, 4))
         loss_nstack = out.sum(dim=4).sum(dim=3).sum(dim=2).sum(dim=1)  # out.[:, :, heat_start:bkg_start, :, :] 查看各个部分损失
-        assert len(loss_nstack) == len(nstack_weight), nstack_weight  # todo: add weights to different channels
+        assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' heatmap L2 loss per stack.........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
         loss = sum(weight_loss) / sum(nstack_weight)
@@ -147,7 +145,7 @@ class MultiTaskLoss(nn.Module):
         mask[:, :, -2, :, :] = multi_task_weight  # except for person mask channel
         mask[:, :, heat_start:bkg_start, :, :] *= keypoint_task_weight
 
-        st = torch.where(torch.ge(sxing, 0.008), s - alpha, 1 - s - beta)  # 0.01 # ap=0.68用的是0.008
+        st = torch.where(torch.ge(sxing, 0.01), s - alpha, 1 - s - beta)  # 0.01 # ap=0.68用的是0.008
         factor = torch.abs(1. - st)  # (1. - st) ** gamma
         # multiplied by mask_miss via broadcast operation
         out = (s - sxing) ** 2 * factor * mask  # type: torch.Tensor

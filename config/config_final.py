@@ -4,8 +4,8 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 10  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
-    learning_rate = 6e-5  # 6e-6  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
+    batch_size = 8  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    learning_rate = 2.5e-4  # 6e-6  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset384.h5"  # 不使用验证集上的数据
     hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset384.h5"
@@ -16,7 +16,7 @@ class TrainingOpt:
     scale_weight = [0.1, 0.2, 0.4, 1.6, 6.4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
     multi_task_weight = 0.1  # person mask loss vs keypoint loss
     keypoint_task_weight = 3  # keypoint heatmap loss vs body part heatmap loss
-    ckpt_path = './link2checkpoints_distributed/PoseNet_12_epoch.pth'  # 102 epoch AP=0.658
+    ckpt_path = './link2checkpoints_distributed/PoseNet_102_epoch.pth'  # 102 epoch AP=0.658
 
 
 class TransformationParams:
@@ -26,12 +26,12 @@ class TransformationParams:
         #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
         self.target_dist = 0.6
         self.scale_prob = 0.8  # 0.8  # scale probability, 0: never scale, 1: always scale
-        self.scale_min = 0.7  # 0.75  # 之前训练设置的是0.8，但发现对小目标很不明显
-        self.scale_max = 1.3  # 1.25
-        self.max_rotate_degree = 45.  # 40 todo: 看看hourglass中512设置的偏移
-        self.center_perterb_max = 40.  # shift augmentation
+        self.scale_min = 0.6  # 0.75  # 之前训练设置的是0.8，但发现对小目标很不明显
+        self.scale_max = 1.5  # 1.25
+        self.max_rotate_degree = 50.  # 40 todo: 看看hourglass中512设置的偏移
+        self.center_perterb_max = 50.  # shift augmentation
         self.flip_prob = 0.5  # flip the image to force the network distinguish the mirror symmetrical keypoints
-        self.tint_prob = 0.3  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
+        self.tint_prob = 0.35  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7 当是512输入时是9
         self.keypoint_gaussian_thre = 0.005  # 低于此值的keypoint gt高斯响应的区域被置零
         self.limb_gaussian_thre = 0.04  # 0.03  # 0.1  # 低于此值的body part gt高斯响应的区域被置零

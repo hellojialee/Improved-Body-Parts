@@ -98,6 +98,7 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
         #
         heatmap_avg = heatmap_avg + heatmap / len(multiplier)
         paf_avg = paf_avg + paf / len(multiplier)
+
         # heatmap_avg = np.maximum(heatmap_avg, heatmap)
         # paf_avg = np.maximum(paf_avg, paf)  # 如果换成取最大，效果会变差，有很多误检
 
@@ -387,11 +388,13 @@ def find_people(connection_all, special_k, all_peaks, params):
                             remove_c = c2
 
                         # 删除和当前limb有连接,并且置信度低的那个人的节点   # FIXME:  获取不删除？为了检测更多？
-                        subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + \
-                                                  subset[small_j][remove_c][1]
-                        subset[small_j][remove_c][0] = -1
-                        subset[small_j][remove_c][1] = -1
-                        subset[small_j][-1][0] -= 1
+                        if params['remove_recon'] > 0:
+
+                            subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + \
+                                                      subset[small_j][remove_c][1]
+                            subset[small_j][remove_c][0] = -1
+                            subset[small_j][remove_c][1] = -1
+                            subset[small_j][-1][0] -= 1
 
                 # if find no partA in the subset, create a new subset
                 # 如果肢体组成的关节点A,B没有被连接到某个人体则组成新的人体
@@ -510,19 +513,19 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
 
     # # # #############################################################################
     # 在验证集上测试代码
-    annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
-    print(annFile)
-    cocoGt = COCO(annFile)
-
-    if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds() # [:100] 在这里可以设置validate图片的大小
+    # annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
+    # print(annFile)
+    # cocoGt = COCO(annFile)
+    #
+    # if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
+    #     validation_ids = cocoGt.getImgIds() # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
     # 在test数据集上测试代码
-    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
-    # cocoGt = COCO(annFile)
-    # validation_ids = cocoGt.getImgIds()
+    annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+    cocoGt = COCO(annFile)
+    validation_ids = cocoGt.getImgIds()
     # #############################################################################
 
     resFile = '%s/results/%s_%s_%s100_results.json'
@@ -563,7 +566,7 @@ if __name__ == "__main__":
     params, model_params = config_reader()
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='my_4_hourglass_focal_epoch_new_76_', dataset='val2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='my_final_3_hourglass_focal_epoch_xing_32_5scale', dataset='test2017')  # 'val2017'
 
     print('over!')
 

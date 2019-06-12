@@ -11,9 +11,8 @@ import torch.nn.functional as F
 class Residual(nn.Module):   #  FIXME: use residual to build hourglass 并且使用预激活方式
     """Residual Block modified by us"""
 
-    def __init__(self, ins, outs, bn=True, relu=True):
+    def __init__(self, ins, outs):
         super(Residual, self).__init__()
-        self.relu_flag = relu
         self.convBlock = nn.Sequential(
             nn.Conv2d(ins, outs//2, 1, bias=False),
             nn.BatchNorm2d(outs//2),
@@ -38,57 +37,14 @@ class Residual(nn.Module):   #  FIXME: use residual to build hourglass 并且使
         x = self.convBlock(x)
         if self.ins != self.outs:
             residual = self.skipConv(residual)
-        x += residual  # Bn layer is in the middle, so we can do in-plcae += here
-
-        if self.relu_flag:
-            x = self.relu(x)
-            return x
-        else:
-            return x
-
-
-class BasicResidual(nn.Module):
-    """
-    Basic block used in ResNet, CornerNet, CenterNet, etc.
-    Used as the basic block to replace 3*3 convolution, increasing the shortcuts in network
-    """
-    def __init__(self, inp_dim, out_dim, stride=1, bn=True, relu=True):
-        super(BasicResidual, self).__init__()
-
-        self.relu_flag = relu
-        self.conv1 = nn.Conv2d(inp_dim, out_dim, (3, 3), padding=(1, 1), stride=(stride, stride), bias=False)
-        self.bn1 = nn.BatchNorm2d(out_dim)
-        self.relu1 = nn.LeakyReLU(negative_slope=0.01, inplace=True)
-
-        self.conv2 = nn.Conv2d(out_dim, out_dim, (3, 3), padding=(1, 1), bias=False)
-        self.bn2 = nn.BatchNorm2d(out_dim)
-
-        self.skip = nn.Sequential(
-            nn.Conv2d(inp_dim, out_dim, (1, 1), stride=(stride, stride), bias=False),
-            nn.BatchNorm2d(out_dim)
-        ) if stride != 1 or inp_dim != out_dim else nn.Sequential()
-        self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)
-
-    def forward(self, x):
-        conv1 = self.conv1(x)
-        bn1 = self.bn1(conv1)
-        relu1 = self.relu1(bn1)
-
-        conv2 = self.conv2(relu1)
-        bn2 = self.bn2(conv2)
-
-        skip = self.skip(x)
-
-        if self.relu_flag:
-            out = self.relu(bn2 + skip)
-        else:
-            out = bn2 + skip
-        return out
+        x += residual
+        x = self.relu(x)
+        return x
 
 
 class Conv(nn.Module):
     # conv block used in hourglass
-    def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=True, relu=True, dropout=False, dialated=1):
+    def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=False, relu=True, dropout=False):
         super(Conv, self).__init__()
         self.inp_dim = inp_dim
         self.relu = None
@@ -97,46 +53,11 @@ class Conv(nn.Module):
         if relu:
             self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)  # 换成 Leak Relu减缓神经元死亡现象
         if bn:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=False, dilation=1)
+            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=False)
             # Different form TF, momentum default in Pytorch is 0.1, which means the decay rate of old running value
             self.bn = nn.BatchNorm2d(out_dim)
         else:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=True, dilation=1)
-
-    def forward(self, x):
-        # examine the input channel equals the conve kernel channel
-        assert x.size()[1] == self.inp_dim, "input channel {} dese not fit kernel channel {}".format(x.size()[1],
-                                                                                                     self.inp_dim)
-        if self.dropout:  # comment these two lines if we do not want to use Dropout layers
-            # p: probability of an element to be zeroed
-            x = F.dropout(x, p=0.2, training=self.training, inplace=False)  # 直接注释掉这一行，如果我们不想使用Dropout
-
-        x = self.conv(x)
-        if self.bn is not None:
-            x = self.bn(x)
-        if self.relu is not None:
-            x = self.relu(x)
-        return x
-
-
-class DilatedConv(nn.Module):
-    """
-    Dilated convolutional layer of stride=1 only!
-    """
-    def __init__(self, inp_dim, out_dim, kernel_size=3, stride=1, bn=True, relu=True, dropout=False, dialation=3):
-        super(DilatedConv, self).__init__()
-        self.inp_dim = inp_dim
-        self.relu = None
-        self.bn = None
-        self.dropout = dropout
-        if relu:
-            self.relu = nn.LeakyReLU(negative_slope=0.01, inplace=True)  # 换成 Leak Relu减缓神经元死亡现象
-        if bn:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=dialation, bias=False, dilation=dialation)
-            # Different form TF, momentum default in Pytorch is 0.1, which means the decay rate of old running value
-            self.bn = nn.BatchNorm2d(out_dim)
-        else:
-            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=dialation, bias=True, dilation=dialation)
+            self.conv = nn.Conv2d(inp_dim, out_dim, kernel_size, stride, padding=(kernel_size - 1) // 2, bias=True)
 
     def forward(self, x):
         # examine the input channel equals the conve kernel channel
@@ -155,10 +76,7 @@ class DilatedConv(nn.Module):
 
 
 class Backbone(nn.Module):
-    """
-    Input Tensor: a batch of images with shape (N, C, H, W)
-    """
-    def __init__(self, nFeat=256, inplanes=3, resBlock=Residual, dilatedBlock=DilatedConv):
+    def __init__(self, nFeat=256, inplanes=3, resBlock=Residual):
         super(Backbone, self).__init__()
         self.nFeat = nFeat
         self.resBlock = resBlock
@@ -169,14 +87,7 @@ class Backbone(nn.Module):
         self.res1 = self.resBlock(64, 128)
         self.pool = nn.MaxPool2d(2, 2)
         self.res2 = self.resBlock(128, 128)
-        self.dilation = nn.Sequential(
-            dilatedBlock(128, 128, dialation=3),
-            dilatedBlock(128, 128, dialation=3),
-            dilatedBlock(128, 128, dialation=4),
-            dilatedBlock(128, 128, dialation=4),
-            dilatedBlock(128, 128, dialation=5),
-            dilatedBlock(128, 128, dialation=5),
-        )
+        self.res3 = self.resBlock(128, self.nFeat)
 
     def forward(self, x):
         # head
@@ -187,22 +98,20 @@ class Backbone(nn.Module):
         x = self.res1(x)
         x = self.pool(x)
         x = self.res2(x)
-        x1 = self.dilation(x)
-        concat_merge = torch.cat([x, x1], dim=1)  # (N, C1+C2, H, W)
+        x = self.res3(x)
 
-        return concat_merge
+        return x
 
 
 class Hourglass(nn.Module):
     """Instantiate an n order Hourglass Network block using recursive trick."""
-    def __init__(self, depth, nFeat, increase=128, bn=False, resBlock=Residual, convBlock=Conv):
+    def __init__(self, depth, nFeat, increase=128, bn=False, resBlock=Conv):
         super(Hourglass, self).__init__()
         self.depth = depth  # oder number
         self.nFeat = nFeat  # input and output channels
         self.increase = increase  # increased channels while the depth grows
         self.bn = bn
         self.resBlock = resBlock
-        self.convBlock = convBlock
         # will execute when instantiate the Hourglass object, prepare network's parameters
         self.hg = self._make_hour_glass()
         self.downsample = nn.MaxPool2d(2, 2)  # no learning parameters, can be used any times repeatedly
@@ -211,21 +120,25 @@ class Hourglass(nn.Module):
     def _make_single_residual(self, depth_id):
         # the innermost conve layer, return as a layer item
         return self.resBlock(self.nFeat + self.increase * (depth_id + 1), self.nFeat + self.increase * (depth_id + 1),
-                             bn=self.bn)                            # ###########  Index: 4
+                             bn=self.bn)                            # ###########  Index: 6
 
     def _make_lower_residual(self, depth_id):
         # return as a list
         pack_layers = [self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
-                                     bn=self.bn),                                     # ######### Index: 0
+                                     bn=self.bn, relu=False),                                     # ######### Index: 0
                        self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * (depth_id + 1),
                                                                                                   # ######### Index: 1
                                      bn=self.bn),
                        self.resBlock(self.nFeat + self.increase * (depth_id + 1), self.nFeat + self.increase * depth_id,
                                                                                                    # ######### Index: 2
                                      bn=self.bn),
-                       self.convBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
-                                     # ######### Index: 3
-                                     bn=self.bn),  # 添加一个Conve精细化上采样?
+                       self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
+                                                                                                   # ######### Index: 3
+                                     bn=self.bn),
+                       self.resBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
+                                                                                                   # ######### Index: 4
+                                     bn=self.bn, relu=False),
+                       nn.LeakyReLU(negative_slope=0.01, inplace=True)                              # ######### Index: 5
                        ]
         return pack_layers
 
@@ -255,7 +168,7 @@ class Hourglass(nn.Module):
         low1 = self.downsample(x)
         low1 = self.hg[depth_id][1](low1)
         if depth_id == (self.depth - 1):  # except for the highest-order hourglass block
-            low2 = self.hg[depth_id][4](low1)
+            low2 = self.hg[depth_id][6](low1)
         else:
             # call the lower-order hourglass block recursively
             low2 = self._hour_glass_forward(depth_id + 1, low1, up_fms)
@@ -266,10 +179,10 @@ class Hourglass(nn.Module):
         #     self.up_fms.append(low2)
         up2 = self.upsample(low3)
         deconv1 = self.hg[depth_id][3](up2)
-        # deconv2 = self.hg[depth_id][4](deconv1)
-        # up1 += deconv2
-        # out = self.hg[depth_id][5](up1)  # relu after residual add
-        return up1 + deconv1
+        deconv2 = self.hg[depth_id][4](deconv1)
+        up1 += deconv2
+        out = self.hg[depth_id][5](up1)  # relu after residual add
+        return out
 
     def forward(self, x):
         """

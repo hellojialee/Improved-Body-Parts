@@ -34,21 +34,28 @@ colors = [[	128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [2
 
 torch.cuda.empty_cache()
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
-parser.add_argument('--max_grad_norm', default=5, type=float,
-    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/cocotry8.jpg', help='input image')  # required=True
-parser.add_argument('--output', type=str, default='result.jpg', help='output image')
+parser.add_argument('--video', type=str, default='pose-demo', help='input video file name')
+parser.add_argument('--frame_ratio', type=int, default=1, help='analyze every [n] frames')
+parser.add_argument('--process_speed', type=int, default=4,
+                        help='Int 1 (fastest, lowest quality) to 4 (slowest, highest quality)')
+parser.add_argument('--start', type=int, default=1, help='Video frame to start with')
+parser.add_argument('--end', type=int, default=None, help='Last video frame to analyze')
+
 parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)
 
 args = parser.parse_args()
-
+frame_rate_ratio = args.frame_ratio
+process_speed = args.process_speed
+starting_frame = args.start
+ending_frame = args.end
+video = args.video
 # ###################################  Setup for some configurations ###########################################
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
-
+currentDT = time.localtime()
+start_datetime = time.strftime("-%m-%d-%H-%M-%S", currentDT)
 
 limbSeq = config.limbs_conn
 dt_gt_mapping = config.dt_gt_mapping
@@ -58,52 +65,8 @@ draw_list = config.draw_list
 # ###############################################################################################################
 
 
-def show_color_vector(oriImg, paf_avg, heatmap_avg):
-    hsv = np.zeros_like(oriImg)
-    hsv[..., 1] = 255
-
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 16], 1.5 * paf_avg[:, :, 16])  # 设置不同的系数，可以使得显示颜色不同
-
-    # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
-    # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
-    # 对于不同方向，产生不同色调
-    # hsv[...,0]等价于hsv[:,:,0]
-    hsv[..., 0] = ang * 180 / np.pi / 2
-
-    # 将矢量大小标准化到0-255范围。因为OpenCV中V分量对应的取值范围是256
-    # 对于同一H、S而言，向量的大小越大，对应颜色越亮
-    hsv[..., 2] = cv2.normalize(mag, None, 0, 255, cv2.NORM_MINMAX)
-    # 最后，将生成好的HSV图像转换为BGR颜色空间
-    limb_flow = cv2.cvtColor(hsv, cv2.COLOR_HSV2RGB)
-
-    plt.imshow(oriImg[:, :, [2, 1, 0]])
-    plt.imshow(limb_flow, alpha=.5)
-    plt.show()
-
-    plt.xticks([])
-    plt.yticks([])
-    plt.imshow(oriImg[:, :, [2, 1, 0]])
-    plt.imshow(paf_avg[:, :, 11], alpha=.5)
-    plt.show()
-
-    plt.xticks([])
-    plt.yticks([])
-    plt.imshow(heatmap_avg[:, :, -1])
-    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show a keypoint
-    plt.show()
-
-    plt.imshow(heatmap_avg[:, :, -2])
-    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show the person mask
-    plt.show()
-
-    plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, 4], alpha=.5)
-    plt.show()
-    t = 2
-
-
 def process(input_image, params, model_params, heat_layers, paf_layers):
-    oriImg = cv2.imread(input_image)  # B,G,R order.    训练数据的读入也是用opencv，因此也是B, G, R顺序
+    oriImg = input_image.copy()  # B,G,R order.    训练数据的读入也是用opencv，因此也是B, G, R顺序
     # oriImg = cv2.resize(oriImg, (768, 768))
     # oriImg = cv2.flip(oriImg, 1) 因为训练时作了flip，所以用这种方式提升并没有作用
     multiplier = [x * model_params['boxsize'] / oriImg.shape[0] for x in params['scale_search']]  # 按照图片高度进行缩放
@@ -140,8 +103,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # output tensor dtype: float 16
         output_tuple = posenet(input_img)
 
-        # ############ different scales can be shown #############
-        output = output_tuple[-1][0].cpu().numpy()
+        output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
 
         output_blob = output[0].transpose((1, 2, 0))
         output_blob0 = output_blob[:, :, :config.paf_layers]
@@ -186,8 +148,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # --------------------------------------------------------------------------------------- #
     # ------------------------  show the limb and foreground channel  -----------------------#
     # --------------------------------------------------------------------------------------- #
-
-    show_color_vector(oriImg, paf_avg, heatmap_avg)
 
     # --------------------------------------------------------------------------------------- #
     # ####################################################################################### #
@@ -527,7 +487,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
             deleteIdx.append(i)
     subset = np.delete(subset, deleteIdx, axis=0)
 
-    canvas = cv2.imread(input_image)  # B,G,R order
+    canvas = input_image  # B,G,R order
     # canvas = oriImg
     keypoints = []
 
@@ -549,9 +509,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
             person_keypoint_coordinates_coco[gt_index] = person_keypoint_coordinates[dt_index]
 
         keypoints.append((person_keypoint_coordinates_coco, 1 - 1.0 / s[-2]))  # s[19] is the score
-
-    for i in range(len(keypoints)):
-        print('the {}th keypoint detection result is : '.format(i), keypoints[i])
 
     # 画所有的峰值
     # for i in range(18):
@@ -589,8 +546,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
 
 if __name__ == '__main__':
-    input_image = args.image
-    output = args.output
 
     posenet = NetworkEval(opt, config, bn=True)
 
@@ -625,31 +580,53 @@ if __name__ == '__main__':
 
     tic = time.time()
     print('start processing...')
+
+    # image path list
+    path = "try_video/tokyo1"  # 待读取的文件夹
+    path_list = os.listdir(path)
+    path_list.sort()  # 对读取的路径进行排序
+    print('the total length of this video is {}'.format(len(path_list)))
+
+    # Output location
+    output_path = 'try_video/outputs/'
+    output_format = '.mp4'
+    video_output = output_path + video + str(start_datetime) + output_format
+
     # load config
     params, model_params = config_reader()
-    tic = time.time()
+
+    # Video reader
+    if ending_frame == None:
+        ending_frame = len(path_list)
+    input_image = cv2.imread(os.path.join(path, path_list[starting_frame]))
+
+    # Video writer
+    output_fps = ending_frame / frame_rate_ratio
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    out = cv2.VideoWriter(video_output, fourcc, output_fps, (input_image.shape[1]//2, input_image.shape[0]//2))
+    # output_fps设置写入视频的帧率，但是只能大于１，也就是说不能托慢，只能加快
+
     # generate image with body parts
-    with torch.no_grad():
-        canvas = process(input_image, params, model_params, config.heat_layers + 2, config.paf_layers)  # todo background + 2
 
-    toc = time.time()
-    print('processing time is %.5f' % (toc - tic))
+    i = starting_frame  # default is 0
+    while i < ending_frame - 1:
+        i += 1
+        if i % frame_rate_ratio == 0:
+            tic = time.time()
 
-    # TODO: the prediction is slow, how to fix it? Not solved yet. see:
-    #  https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/5
+            # generate image with body parts
+            with torch.no_grad():
+                canvas = process(input_image, params, model_params, config.heat_layers + 2, config.paf_layers)  # todo background + 2
 
-    cv2.namedWindow("result", cv2.WINDOW_AUTOSIZE)  # cv2.WINDOW_NORMAL 自动适合的窗口大小
-    cv2.imshow('result', canvas)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-    cv2.imwrite(output, canvas)
+            print('Processing frame: {}/{}'.format(i, ending_frame-starting_frame))
+            toc = time.time()
+            print('processing time is %.5f' % (toc - tic))
 
-    # pdf = PdfPages(output + '.pdf')
-    # plt.figure()
-    # plt.plot(canvas[:, :, [2, 1, 0]])
-    # plt.tight_layout()
-    # plt.show()
-    # pdf.savefig()
-    # plt.close()
-    # pdf.close()
+            for j in range(40):  # 重复写入使得视频看着不至于太快
+                out.write(canvas)
+        input_image = cv2.imread(os.path.join(path, path_list[i]))
+    out.release()  # 写完视频之后一定要释放
+    print('Processing video finished!')
+
+
 
