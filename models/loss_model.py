@@ -66,7 +66,7 @@ class MultiTaskLoss(nn.Module):
         # plt.show()
         # #####################################################
 
-        heatmap_loss = self.l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...], self.heat_start,
+        heatmap_loss = self.focal_l2_loss(pred_heatmap, gt_heatmaps[None, ...], gt_mask_misses[None, ...], self.heat_start,
                                     self.bkg_start, nstack_weight=self.nstack_weight,
                                     multi_task_weight=self.multi_task_weight,
                                     keypoint_task_weight=self.keypoint_task_weight)
@@ -129,7 +129,7 @@ class MultiTaskLoss(nn.Module):
 
     @staticmethod
     def focal_l2_loss(s, sxing, mask_miss, heat_start, bkg_start, gamma=2, multi_task_weight=0.1,
-                      keypoint_task_weight=1, nstack_weight=[1, 1, 1, 1], alpha=0.1, beta=0.02):
+                      keypoint_task_weight=1, nstack_weight=[1, 1, 1, 1], alpha=0., beta=0.):
         """
         Compute the focal L2 loss between predicted and groundtruth score maps.
         :param s:  predicted tensor (nstack, batch, channel, height, width), predicted score maps

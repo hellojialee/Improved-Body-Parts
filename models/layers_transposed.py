@@ -225,7 +225,7 @@ class Hourglass(nn.Module):
                                      bn=self.bn),
                        self.convBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
                                      # ######### Index: 3
-                                     bn=self.bn),  # 添加一个Conve精细化上采样?
+                                     bn=self.bn),  # 添加一个Conve精细化上采样的特征图?
                        ]
         return pack_layers
 

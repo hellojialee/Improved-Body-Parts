@@ -147,13 +147,13 @@ def keypoint_heatmap_nms(heat, kernel=3, thre=0.1):
     return heat * keep
 
 
-def refine_centroid(scorefmp, anchor, radius):
+def refine_centroid(scorefmp, anchor, radius):  # TODO: 添加keypoint type的sigma对score做归一化，折合成1.x倍，防止score衰减
     """
     Refine the centroid coordinate
     :param scorefmp: 2-D numpy array, original regressed score map
     :param anchor: python tuple, (x,y) coordinates
     :param radius: int, range of considered scores
-    :return: refined anchor
+    :return: refined anchor, refined score
     """
 
     x_c, y_c = anchor
@@ -163,7 +163,7 @@ def refine_centroid(scorefmp, anchor, radius):
     y_max = y_c + radius + 1
 
     if y_max > scorefmp.shape[0] or y_min < 0 or x_max > scorefmp.shape[1] or x_min < 0:
-        return anchor
+        return anchor + (scorefmp[y_c, x_c], )
 
     score_box = scorefmp[y_min:y_max, x_min:x_max]
     x_grid, y_grid = np.mgrid[-radius:radius+1, -radius:radius+1]
@@ -172,7 +172,7 @@ def refine_centroid(scorefmp, anchor, radius):
     x_refine = int(np.rint(x_c + offset_x))
     y_refine = int(np.rint(y_c + offset_y))
     refined_anchor = (x_refine, y_refine)
-    return refined_anchor
+    return refined_anchor + (score_box.mean(),)
 
 
 def set_bn_eval_fp32(m):

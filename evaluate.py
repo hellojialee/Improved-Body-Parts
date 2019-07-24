@@ -64,8 +64,8 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
     # multiplier = [1]  # fixme , add this line
     for m in range(len(multiplier)):
         scale = multiplier[m]
-        if scale * image.shape[0] > 2300 or scale * image.shape[1] > 3200:
-            scale = min(2300 / image.shape[0], 3200 / image.shape[1])
+        if scale * image.shape[0] > 2600 or scale * image.shape[1] > 3800:
+            scale = min(2600 / image.shape[0], 3800 / image.shape[1])
             print("Input image: '{}' is too big, shrink it!".format(input_image_path))
 
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
@@ -115,8 +115,8 @@ def find_peaks(heatmap_avg, params):
     filter_map = torch.from_numpy(filter_map).cuda()
 
     # # #######################   Add Gaussian smooth will be bad #######################
-    # smoothing = util.GaussianSmoothing(18, 7, 1.2)
-    # filter_map = F.pad(filter_map, (3, 3, 3, 3), mode='reflect')
+    # smoothing = util.GaussianSmoothing(18, 5, 3)
+    # filter_map = F.pad(filter_map, (2, 2, 2, 2), mode='reflect')
     # filter_map = smoothing(filter_map)
     # # ######################################################################
 
@@ -130,13 +130,14 @@ def find_peaks(heatmap_avg, params):
         # 这可通过高斯函数（钟形函数，即喇叭形数）的权重方案来解决。
         peaks_binary = filter_map[:, :, part]
         peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))  # note reverse
-        refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
-        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in refined_peaks]
-        id = range(peak_counter, peak_counter + len(refined_peaks))
-        peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
+        refined_peaks_with_score = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
+        # peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in refined_peaks]
+
+        id = range(peak_counter, peak_counter + len(refined_peaks_with_score))
+        peaks_with_score_and_id = [refined_peaks_with_score[i] + (id[i],) for i in range(len(id))]
 
         all_peaks.append(peaks_with_score_and_id)
-        peak_counter += len(refined_peaks)
+        peak_counter += len(peaks)
 
     return all_peaks
 
@@ -161,7 +162,7 @@ def find_connections(all_peaks, paf_avg, image_width, params):
                 for j in range(nB):
                     vec = np.subtract(candB[j][:2], candA[i][:2])
                     norm = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1])
-                    mid_num = params['min_num']  # max(int(norm), 15)
+                    mid_num = min(int(round(norm + 1)), params['mid_num'])
                     # failure case when 2 body parts overlaps
                     if norm == 0:  # 为了跳过出现不同节点相互覆盖出现在同一个位置，也有说norm加一个接近0的项避免分母为0,详见：
                         # https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/54
@@ -518,7 +519,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     # cocoGt = COCO(annFile)
     #
     # if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-    #     validation_ids = cocoGt.getImgIds() # [:100] 在这里可以设置validate图片的大小
+    #     validation_ids = cocoGt.getImgIds()[:300]  # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
@@ -566,7 +567,7 @@ if __name__ == "__main__":
     params, model_params = config_reader()
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='my_final_3_hourglass_focal_epoch_xing_32_5scale', dataset='test2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_67_512_5scale_more-train-scale', dataset='test2017')  # 'val2017'
 
     print('over!')
 

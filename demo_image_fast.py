@@ -37,7 +37,7 @@ parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/cocotry8.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/cocotry4.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
@@ -223,14 +223,13 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # note reverse. xy坐标系和图像坐标系
         # np.nonzero: Return the indices of the elements that are non-zero
         # 添加加权坐标计算，根据不同类型关键点弥散程度不同选择加权的范围
-        # refined_peaks = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
+        refined_peaks_with_score = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
 
-        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]  # 列表解析式，生产的是list  # refined_peaks
+        # peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]  # 列表解析式，生产的是list  # refined_peaks
         # [(205, 484, 0.9319216758012772),
         #  # (595, 484, 0.777797631919384),
-
-        id = range(peak_counter, peak_counter + len(peaks))
-        peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
+        id = range(peak_counter, peak_counter + len(refined_peaks_with_score))
+        peaks_with_score_and_id = [refined_peaks_with_score[i] + (id[i],) for i in range(len(id))]
         # 为每一个相应peak (parts)都依次编了一个号
 
         all_peaks.append(peaks_with_score_and_id)
@@ -265,7 +264,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                 for j in range(nB):
                     vec = np.subtract(candB[j][:2], candA[i][:2])
                     norm = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1])
-                    mid_num = params['min_num']
+                    mid_num = min(int(round(norm + 1)), params['mid_num'])
                     # failure case when 2 body parts overlaps
                     if norm == 0:  # 为了跳过出现不同节点相互覆盖出现在同一个位置，也有说norm加一个接近0的项避免分母为0,详见：
                         # https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/54
@@ -276,7 +275,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                     limb_response = np.array([score_mid[int(round(startend[I][1])), int(round(startend[I][0]))] \
                                       for I in range(len(startend))])
-                    # limb_response 是代表某一个limb通道下的heat map响应
 
                     score_midpts = limb_response
 

@@ -129,7 +129,7 @@ class Transformer:
 
         # 变换之后还会缩放到config.height大小, (self.config.height, self.config.width)　指定的是返回图像的尺寸
         img = cv2.warpAffine(img, M, (self.config.height, self.config.width), flags=cv2.INTER_LINEAR,
-                             borderMode=cv2.BORDER_CONSTANT, borderValue=(127, 127, 127))
+                             borderMode=cv2.BORDER_CONSTANT, borderValue=(124, 127, 127))
         # for debug, see the transformed data
         # plt.imshow(img[:,:,[2,1,0]])  # opencv imread ---> BGR order
         # plt.show()

@@ -295,7 +295,7 @@ def gaussian(sigma, x, u):
     return y
 
 
-def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf area to ellipse
+def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01, return_dist=False):  # TODO: change the paf area to ellipse
     """
     这里的distance函数实际上返回的是gauss分布的PAF
     # 实验发现在46*46尺寸的feature map上生成PAF，每个limb已经很短了，没有必要区分是直线区域还是椭圆区域
@@ -312,6 +312,8 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
     dist = xD * detaY - detaX * yD  # 常数与numpy数组(X,Y是坐标数组,多个坐标）的运算，broadcast
     dist /= (norm2 + 1e-6)
     dist = np.abs(dist)
+    if return_dist:
+        return dist
     # ratiox = np.abs(detaX / (xD + 1e-8))
     # ratioy = np.abs(detaY / (yD + 1e-8))
     # ratio = np.where(ratiox < ratioy, ratiox, ratioy)
@@ -321,7 +323,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01):  # TODO: change the paf
 
     guass_dist = gaussian(sigma, dist, 0)
     # TODO: 下一个换成# =0.01
-    guass_dist[guass_dist <= thresh] = 0.02  #   # thresh  # 0.67的L2用的是0  # 0.68 flocal 用的=thresh 同前面的关键点响应，太远的不要
+    guass_dist[guass_dist <= thresh] = 0.02   # thresh  # 0.67的L2用的是0  # 0.68 flocal 用的=thresh 同前面的关键点响应，太远的不要
     # b = thre
     # guass_dist[dist >= b] = 0
 
