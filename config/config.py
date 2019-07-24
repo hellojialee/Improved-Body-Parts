@@ -96,7 +96,7 @@ class CanonicalConfig:
         self.heat_start = self.paf_layers  # Notice: 此处channel安排上，paf_map在前，heat_map在后
         self.bkg_start = self.paf_layers + self.heat_layers  # 用于feature map的计数,2个background的起始点
 
-        self.offset_layers = 2 * self.num_parts
+        self.offset_layers = 2  # * self.num_parts # 选择使用所有的关节点共用 x-offset 和 y-offset
         self.offset_start = self.num_layers
 
         self.mask_shape = (self.height // self.stride, self.width // self.stride)  # 46, 46

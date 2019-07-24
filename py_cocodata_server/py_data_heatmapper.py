@@ -237,6 +237,14 @@ class Heatmapper:
             self.put_limb_gaussian_maps(heatmaps, layer, joints[visible, fr, 0:2], joints[visible, to, 0:2])
 
     def put_offset_vector_maps(self, offset_vectors, mask_offset, layer, joints):
+        """
+        生成offset heatmap
+        :param offset_vectors:
+        :param mask_offset:
+        :param layer: 将当前offset放置在 2*layer, 2*layer+1 channel上
+        :param joints:
+        :return:
+        """
         for i in range(joints.shape[0]):
             x_min = int(round(joints[i, 0] / self.config.stride) - self.offset_size // 2)
             x_max = int(round(joints[i, 0] / self.config.stride) + self.offset_size // 2 + 1)
@@ -280,7 +288,7 @@ class Heatmapper:
 
         for i in range(self.config.num_parts):  # len(config.num_parts) = 18, 不包括背景keypoint
             visible = joints[:, i, 2] < 2  # only annotated (visible) keypoints are considered !
-            self.put_offset_vector_maps(offset_vectors, mask_offset, i, joints[visible, i, 0:2])
+            self.put_offset_vector_maps(offset_vectors, mask_offset, 0, joints[visible, i, 0:2])  # 所有关键点共享offset channel
 
         offset_vectors[mask_offset > 0] /= mask_offset[mask_offset > 0]  # average the offsets in the same location
         mask_offset[mask_offset > 0] = 1  # reset the offset mask area
