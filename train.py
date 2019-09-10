@@ -1,6 +1,9 @@
 import os
 import argparse
 import time
+import tqdm
+import cv2
+import matplotlib.pylab as plt
 import torch.cuda
 import numpy as np
 import torch.nn as nn
@@ -11,18 +14,24 @@ from torch.utils.data import DataLoader
 from models.posenet import PoseNet
 from models.loss_model import MultiTaskLoss
 import warnings
+
+
+os.environ['CUDA_VISIBLE_DEVICES'] = "0, 1, 2, 3"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
-parser = argparse.ArgumentParser(description='SSD Training')
+parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
 args = parser.parse_args()
 
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
 soureconfig = COCOSourceConfig(opt.hdf5_train_data)
-print('start loading the data......')
-val_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
-print('loading the data finish......')
+train_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
+train_loader = DataLoader(train_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=16,
+                          pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
+
+soureconfig_val = COCOSourceConfig(opt.hdf5_val_data)
+val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=True)  # shuffle in data loader
 val_loader = DataLoader(val_data, batch_size=opt.batch_size, shuffle=True, drop_last=True, num_workers=8,
                         pin_memory=True)  # num_workers is tuned according to project, too big or small is not good.
 
@@ -113,7 +122,7 @@ def train(epoch):
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
         # target tensor shape: [8,512,512,3], [8, 1, 128,128], [8,43,128,128], [8,36,128,128], [8,36,128,128]
-        images, mask_misses, heatmaps, offsets, mask_offsets = target_tuple
+        images, mask_misses, heatmaps = target_tuple  # , offsets, mask_offsets
         # images = Variable(images)
         # loc_targets = Variable(loc_targets)
         # conf_targets = Variable(conf_targets)
