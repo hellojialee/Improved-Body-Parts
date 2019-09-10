@@ -39,7 +39,7 @@ parser.add_argument('--frame_ratio', type=int, default=1, help='analyze every [n
 parser.add_argument('--process_speed', type=int, default=4,
                         help='Int 1 (fastest, lowest quality) to 4 (slowest, highest quality)')
 parser.add_argument('--start', type=int, default=1, help='Video frame to start with')
-parser.add_argument('--end', type=int, default=None, help='Last video frame to analyze')
+parser.add_argument('--end', type=int, default=20, help='Last video frame to analyze')
 
 parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
@@ -624,7 +624,12 @@ if __name__ == '__main__':
 
             for j in range(40):  # 重复写入使得视频看着不至于太快
                 out.write(canvas)
+                # cv2.namedWindow('hi')
+                # cv2.imshow('hi', canvas)
+                # cv2.waitKey()
         input_image = cv2.imread(os.path.join(path, path_list[i]))
+        print(input_image.dtype)
+
     out.release()  # 写完视频之后一定要释放
     print('Processing video finished!')
 

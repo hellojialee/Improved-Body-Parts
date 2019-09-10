@@ -1,5 +1,6 @@
-#!/usr/bin/env python
-# coding:utf-8
+"""
+For 4-stage IMNH with 384*384 input training.
+"""
 import numpy as np
 
 
@@ -33,7 +34,7 @@ class TransformationParams:
         self.flip_prob = 0.5  # flip the image to force the network distinguish the mirror symmetrical keypoints
         self.tint_prob = 0.35  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7 当是512输入时是9
-        self.keypoint_gaussian_thre = 0.005  # 低于此值的keypoint gt高斯响应的区域被置零
+        self.keypoint_gaussian_thre = 0.01  # 低于此值的keypoint gt高斯响应的区域被置零
         self.limb_gaussian_thre = 0.04  # 0.03  # 0.1  # 低于此值的body part gt高斯响应的区域被置零
         self.paf_sigma = 7  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
         # the value of sigma is important, there should be an equal contribution between foreground

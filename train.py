@@ -8,7 +8,7 @@ import torch.optim as optim
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 from data.mydataset import MyDataset
 from torch.utils.data import DataLoader
-from models.posenet import PoseNet, PoseNet_easy
+from models.posenet import PoseNet
 from models.loss_model import MultiTaskLoss
 import warnings
 warnings.filterwarnings("ignore")

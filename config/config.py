@@ -1,14 +1,16 @@
-#!/usr/bin/env python
-# coding:utf-8
+"""
+ Default Settings.
+ For quick experiments, we train the network with 384*384 input, then we continue to trian with 512*512 input.
+"""
 import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 5  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
-    learning_rate = 2.5e-5  # 6e-6  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
+    batch_size = 8  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    learning_rate = 2.5e-5  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
-    hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"  # 不使用验证集上的数据
-    hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset512.h5"
+    hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset384.h5"  # 不使用验证集上的数据
+    hdf5_val_data = "./data/dataset/coco/link2coco2017/coco_val_dataset384.h5"
     nstack = 4  # stacked number of hourglass
     hourglass_inp_dim = 256
     increase = 128  # increased channels once down-sampling in the hourglass networks
@@ -16,7 +18,7 @@ class TrainingOpt:
     scale_weight = [0.1, 0.2, 0.4, 1.6, 6.4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
     multi_task_weight = 0.1  # person mask loss vs keypoint loss
     keypoint_task_weight = 3  # keypoint heatmap loss vs body part heatmap loss
-    ckpt_path = './link2checkpoints_distributed/PoseNet_67_epoch.pth'  # 102 epoch AP=0.658
+    ckpt_path = './link2checkpoints_distributed/PoseNet_52_epoch.pth'  # 102 epoch AP=0.658
 
 
 class TransformationParams:
@@ -47,8 +49,8 @@ class TransformationParams:
 class CanonicalConfig:
     """Config used in ouf project"""
     def __init__(self):
-        self.width = 512
-        self.height = 512
+        self.width = 384
+        self.height = 384
         self.stride = 4  # 用于计算网络输出的feature map的尺寸
         # self.img_mean = [0.485, 0.456, 0.406]  # RGB format mean and standard variance
         # self.img_std = [0.229, 0.224, 0.225]

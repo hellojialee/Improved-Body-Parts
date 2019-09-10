@@ -1,3 +1,6 @@
+"""
+Copied from Associative Embedding pytorch project. Hourglass Network
+"""
 import torch
 from torch.autograd import Variable
 from torch import nn

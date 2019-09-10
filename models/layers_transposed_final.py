@@ -1,3 +1,7 @@
+"""
+Used by 3-stage and 4-stage Identity Mapping Hourglass Network.
+"""
+
 from torch import nn
 from torch.autograd import Function
 import sys
@@ -8,7 +12,7 @@ import torch
 import torch.nn.functional as F
 
 
-class Residual(nn.Module):   #  FIXME: use residual to build hourglass 并且使用预激活方式
+class Residual(nn.Module):
     """Residual Block modified by us"""
 
     def __init__(self, ins, outs):

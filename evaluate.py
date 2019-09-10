@@ -1,8 +1,12 @@
+"""
+You can refer to the supplementary pdf which is in english for explaining.
+"""
 import sys
 sys.path.append("..")  # 包含上级目录
 import json
 import math
 import numpy as np
+from itertools import product
 from scipy.ndimage.filters import gaussian_filter
 import tqdm
 import cv2
@@ -62,42 +66,79 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
     paf_avg = np.zeros((image.shape[0], image.shape[1], paf_layers))
     multiplier = [x * model_params['boxsize'] / image.shape[0] for x in params['scale_search']]  # 把368boxsize去掉,效果稍微下降了
     # multiplier = [1]  # fixme , add this line
-    for m in range(len(multiplier)):
-        scale = multiplier[m]
-        if scale * image.shape[0] > 2600 or scale * image.shape[1] > 3800:
+    rotate_angle = params['rotation_search']
+    for item in product(multiplier, rotate_angle):
+        scale, angle = item
+        # if scale * image.shape[0] > 2300 or scale * image.shape[1] > 3400:
+        #   scale = min(2300 / image.shape[0], 3400 / image.shape[1])
+        if scale * image.shape[0] > 2600 or scale * image.shape[1] > 3800:  # ### 我们更改了这里
             scale = min(2600 / image.shape[0], 3800 / image.shape[1])
             print("Input image: '{}' is too big, shrink it!".format(input_image_path))
 
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-        imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['max_downsample'],
+        imageToTest_padded, pad = util.center_pad(imageToTest, model_params['max_downsample'],
                                                            model_params['padValue'])
 
         # ################################# Important!  ###########################################
-        # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
-        input_img = np.float32(imageToTest_padded[None, ...] / 255)
-        input_img = torch.from_numpy(input_img).cuda()
+        # #############################  We use OpenCV to read image (BGR) all the time #######################
+        # Input Tensor: a batch of images within [0,1], required shape in this project : (1, height, width, channels)
+        input_img = np.float32(imageToTest_padded / 255)
 
+        # ############################## Rotate the input image #####################3
+        if angle != 0:
+            rotate_matrix = cv2.getRotationMatrix2D((input_img.shape[0] / 2, input_img.shape[1]/2), angle, 1)
+            rotate_matrix_reverse = cv2.getRotationMatrix2D((input_img.shape[0] / 2, input_img.shape[1] / 2), -angle, 1)
+            input_img = cv2.warpAffine(input_img, rotate_matrix, (0, 0))
+
+        # input_img -= np.array(config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
+        # input_img /= np.array(config.img_std[::-1])
+        # ################################## add flip image ################################
+        swap_image = input_img[:, ::-1, :].copy()
+        # plt.imshow(swap_image[:, :, [2, 1, 0]])  # Opencv image format: BGR
+        # plt.show()
+        input_img = np.concatenate((input_img[None, ...], swap_image[None, ...]),
+                                   axis=0)  # (2, height, width, channels)
+        input_img = torch.from_numpy(input_img).cuda()
+        # ###################################################################################
+        # output tensor dtype: float 16
         output_tuple = posenet(input_img)
 
         output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
+
         output_blob = output[0].transpose((1, 2, 0))
         output_blob0 = output_blob[:, :, :config.paf_layers]
         output_blob1 = output_blob[:, :, config.paf_layers:config.num_layers]
 
+        output_blob_flip = output[1].transpose((1, 2, 0))
+        output_blob0_flip = output_blob_flip[:, :, :config.paf_layers]  # paf layers
+        output_blob1_flip = output_blob_flip[:, :, config.paf_layers:config.num_layers]  # keypoint layers
+
+        # ###################################################################################
+        # ################################## flip ensemble ################################
+        # ###################################################################################
+        output_blob0_avg = (output_blob0 + output_blob0_flip[:, ::-1, :][:, :, flip_paf_ord]) / 2
+        output_blob1_avg = (output_blob1 + output_blob1_flip[:, ::-1, :][:, :, flip_heat_ord]) / 2
+
         # extract outputs, resize, and remove padding
         heatmap = cv2.resize(output_blob1_avg, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
                              interpolation=cv2.INTER_CUBIC)
-        heatmap = heatmap[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
+        if angle != 0:
+            heatmap = cv2.warpAffine(heatmap, rotate_matrix_reverse, (0, 0))
+
+        heatmap = heatmap[pad[0]:imageToTest_padded.shape[0] - pad[2], pad[1]:imageToTest_padded.shape[1] - pad[3], :]
         heatmap = cv2.resize(heatmap, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_CUBIC)
 
         # output_blob0 is PAFs
         paf = cv2.resize(output_blob0_avg, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
                          interpolation=cv2.INTER_CUBIC)
-        paf = paf[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
+        if angle != 0:
+            paf = cv2.warpAffine(paf, rotate_matrix_reverse, (0, 0))
+
+        paf = paf[pad[0]:imageToTest_padded.shape[0] - pad[2], pad[1]:imageToTest_padded.shape[1] - pad[3], :]
         paf = cv2.resize(paf, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_CUBIC)
-        #
-        heatmap_avg = heatmap_avg + heatmap / len(multiplier)
-        paf_avg = paf_avg + paf / len(multiplier)
+
+        heatmap_avg = heatmap_avg + heatmap / (len(multiplier)*len(rotate_angle))
+        paf_avg = paf_avg + paf / (len(multiplier)*len(rotate_angle))
 
         # heatmap_avg = np.maximum(heatmap_avg, heatmap)
         # paf_avg = np.maximum(paf_avg, paf)  # 如果换成取最大，效果会变差，有很多误检
@@ -435,8 +476,8 @@ def find_people(connection_all, special_k, all_peaks, params):
     return subset, candidate
 
 
-def process(input_image, params, model, model_params, heat_layers, paf_layers):
-    oriImg = cv2.imread(input_image)  # B,G,R order
+def process(input_image_path, params, model, model_params, heat_layers, paf_layers):
+    oriImg = cv2.imread(input_image_path)  # B,G,R order !!
     # print(input_image)
     torch.cuda.empty_cache()
     heatmap, paf = predict(oriImg, params, model, model_params, heat_layers, paf_layers, input_image_path)
@@ -492,7 +533,7 @@ def format_results(keypoints, resFile):
         for keypoint_list, score in people:
             format_keypoint_list = []
             for x, y in keypoint_list:
-                for v in [int(x), int(y), 1 if x > 0 or y > 0 else 0]:
+                for v in [x, y, 1 if x > 0 or y > 0 else 0]:  # int(x), int(y)
                     # 坐标取了整数,为了减少文件的大小，如果x,y有一个有值，那么标记这个点为可见。　如果x or y =0,令v=0,coco只评测v>0的点
                     format_keypoint_list.append(v)
 
@@ -519,7 +560,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     # cocoGt = COCO(annFile)
     #
     # if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-    #     validation_ids = cocoGt.getImgIds()[:300]  # [:100] 在这里可以设置validate图片的大小
+    #     validation_ids = cocoGt.getImgIds()[:10]  # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
@@ -567,7 +608,7 @@ if __name__ == "__main__":
     params, model_params = config_reader()
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_67_512_5scale_more-train-scale', dataset='test2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_52_512_input_5scale_float', dataset='test2017')  # 'val2017'
 
     print('over!')
 

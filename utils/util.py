@@ -2,6 +2,7 @@ import numpy as np
 import math
 import numbers
 import torch
+import torchvision
 from torch import nn
 from torch.nn import functional as F
 from io import StringIO
@@ -62,6 +63,41 @@ def padRightDownCorner(img, stride, padValue):
     img_padded = np.concatenate((img_padded, pad_right), axis=1)
 
     return img_padded, pad
+
+
+def center_pad(image, stride, padValue):
+    w, h = image.shape[1], image.shape[0]
+    delta_h = 0 if (h % stride == 0) else stride - (h % stride)
+    delta_w = 0 if (w % stride == 0) else stride - (w % stride)  # right
+    target_h = h + delta_h
+    target_w = w + delta_w
+    left = int((target_w - w) / 2.0)
+    top = int((target_h - h) / 2.0)
+    ltrb = (
+        left,
+        top,
+        delta_w - left,
+        delta_h - top,
+    )  # 给出左，上，右，下分别的pad长度，后面torchvision.transforms.functional.pad将会识别出给了4个pad参数，从而开始pad
+    # ltrb: left, top, right, below
+
+    pad = 4 * [None]
+    pad[0] = ltrb[1]  # up
+    pad[1] = ltrb[0]  # left
+    pad[2] = ltrb[3]  # down
+    pad[3] = ltrb[2]  # right
+
+    img_padded = image
+    pad_up = np.tile(img_padded[0:1, :, :] * 0 + padValue, (pad[0], 1, 1))
+    img_padded = np.concatenate((pad_up, img_padded), axis=0)
+    # 注意! concatenate 两个数组的顺序很重要
+    pad_left = np.tile(img_padded[:, 0:1, :] * 0 + padValue, (1, pad[1], 1))
+    img_padded = np.concatenate((pad_left, img_padded), axis=1)
+    pad_down = np.tile(img_padded[-2:-1, :, :] * 0 + padValue, (pad[2], 1, 1))
+    img_padded = np.concatenate((img_padded, pad_down), axis=0)
+    pad_right = np.tile(img_padded[:, -2:-1, :] * 0 + padValue, (1, pad[3], 1))
+    img_padded = np.concatenate((img_padded, pad_right), axis=1)
+    return img_padded,  pad
 
 
 class GaussianSmoothing(nn.Module):
@@ -149,7 +185,7 @@ def keypoint_heatmap_nms(heat, kernel=3, thre=0.1):
 
 def refine_centroid(scorefmp, anchor, radius):  # TODO: 添加keypoint type的sigma对score做归一化，折合成1.x倍，防止score衰减
     """
-    Refine the centroid coordinate
+    Refine the centroid coordinate. It dose not affect the results after testing.
     :param scorefmp: 2-D numpy array, original regressed score map
     :param anchor: python tuple, (x,y) coordinates
     :param radius: int, range of considered scores
@@ -169,8 +205,8 @@ def refine_centroid(scorefmp, anchor, radius):  # TODO: 添加keypoint type的si
     x_grid, y_grid = np.mgrid[-radius:radius+1, -radius:radius+1]
     offset_x = (score_box * x_grid).sum() / score_box.sum()
     offset_y = (score_box * y_grid).sum() / score_box.sum()
-    x_refine = int(np.rint(x_c + offset_x))
-    y_refine = int(np.rint(y_c + offset_y))
+    x_refine = x_c + offset_x  # int(np.rint(x_c + offset_x))
+    y_refine = y_c + offset_y  #int(np.rint(y_c + offset_y))
     refined_anchor = (x_refine, y_refine)
     return refined_anchor + (score_box.mean(),)
 
