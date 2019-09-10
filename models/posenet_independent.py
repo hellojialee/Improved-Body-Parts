@@ -1,7 +1,12 @@
+"""
+No skip residual connection between the same scales across different stacks.
+"""
 import math
 import torch
 from torch import nn
 from models.layers import Conv, Hourglass
+from models.loss_model_parallel import MultiTaskLossParallel
+from models.loss_model import MultiTaskLoss
 
 
 class Merge(nn.Module):
@@ -72,18 +77,12 @@ class PoseNet(nn.Module):
         x = self.pre(x)
         pred = []
         # loop over stack
+
         for i in range(self.nstack):
             preds_instack = []
             # return 5 scales of feature maps
             hourglass_feature = self.hourglass[i](x)
 
-            if i == 0:  # cache for smaller feature maps produced by hourglass block
-                features__cache = [torch.zeros_like(hourglass_feature[k + 1]) for k in range(4)]
-            else:  # res connection cross stages
-                for k in range(4):
-                    #  python里面的+=, ，*=也是in-place operation,需要注意
-                    hourglass_feature[k + 1] = hourglass_feature[k + 1] + features__cache[k]
-            # feature maps before heatmap regression
             features_instack = self.features[i](hourglass_feature)
 
             for j in range(5):  # handle 5 scales of heatmaps
@@ -92,10 +91,7 @@ class PoseNet(nn.Module):
                     if j == 0:
                         x = x + self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
                             features_instack[j])
-                    else:
-                        # reset the res caches
-                        features__cache[j - 1] = self.merge_preds[i][j](preds_instack[j]) + self.merge_features[i][j](
-                            features_instack[j])
+
             pred.append(preds_instack)
         # returned list shape: [nstack * [128*128, 64*64, 32*32, 16*16, 8*8]]
         return pred
@@ -121,6 +117,50 @@ class PoseNet(nn.Module):
                 torch.nn.init.normal_(m.weight.data, 0, 0.01)  # m.weight.data.normal_(0, 0.01) m.bias.data.zero_()
 
 
+class Network(torch.nn.Module):
+    """
+    Wrap the network module as well as the loss module on all GPUs to balance the computation among GPUs.
+    """
+    def __init__(self, opt, config, bn=False, dist=False):
+        super(Network, self).__init__()
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
+        # If we use train_parallel, we implement the parallel loss . And if we use train_distributed,
+        # we should use single process loss because each process on these 4 GPUs  is independent
+        self.criterion = MultiTaskLoss(opt, config) if dist else MultiTaskLossParallel(opt, config)
+
+    def forward(self, inp_imgs, target_tuple):
+        # Batch will be divided and Parallel Model will call this forward on every GPU
+        output_tuple = self.posenet(inp_imgs)
+        loss = self.criterion(output_tuple, target_tuple)
+
+        if not self.training:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return output_tuple, loss
+        else:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return loss
+
+
+class NetworkEval(torch.nn.Module):
+    """
+    Wrap the network module as well as the loss module on all GPUs to balance the computation among GPUs.
+    """
+    def __init__(self, opt, config, bn=False):
+        super(NetworkEval, self).__init__()
+        self.posenet = PoseNet(opt.nstack, opt.hourglass_inp_dim, config.num_layers, bn=bn)
+
+    def forward(self, inp_imgs):
+        # Batch will be divided and Parallel Model will call this forward on every GPU
+        output_tuple = self.posenet(inp_imgs)
+
+        if not self.training:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            return output_tuple
+        else:
+            # output will be concatenated  along batch channel automatically after the parallel model return
+            raise ValueError('\nOnly eval mode is available!!')
+
+
 if __name__ == '__main__':
     from time import time
 
@@ -140,9 +180,4 @@ if __name__ == '__main__':
     t1 = time()
     print('********** Consuming Time is: {} second  **********'.format(t1 - t0))
 
-    # #
-    # import torch.onnx
-    #
-    # pose = PoseNet(4, 256, 34)
-    # dummy_input = torch.randn(1, 512, 512, 3)
-    # torch.onnx.export(pose, dummy_input, "posenet.onnx")  # netron --host=localhost
+

@@ -29,8 +29,8 @@ datasets = [
 ]
 
 
-tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset384_noval.h5")
-val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset384_noval.h5")
+tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset384.h5")
+val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset384.h5")
 
 val_size = 5000  # size of validation set  设置的validation subset的大小.　剩余的val数据将选入train数据中
 image_size = 384  # 用于训练网络时，设定的训练集图片的统一尺寸　

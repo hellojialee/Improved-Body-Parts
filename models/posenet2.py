@@ -1,5 +1,5 @@
 """
-No skip residual connection between the same scales across different stacks.
+3-stage Identity Mapping Hourglass Network.
 """
 import math
 import torch

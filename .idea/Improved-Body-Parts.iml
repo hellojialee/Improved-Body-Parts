@@ -7,7 +7,7 @@
       <excludeFolder url="file://$MODULE_DIR$/data/dataset/coco" />
       <excludeFolder url="file://$MODULE_DIR$/link2checkpoints_distributed" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.6 (pytorch)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.6 (phoenix)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">

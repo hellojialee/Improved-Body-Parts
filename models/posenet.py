@@ -1,5 +1,5 @@
 """
-No skip residual connection between the same scales across different stacks.
+Still in development.
 """
 import math
 import torch
@@ -59,7 +59,7 @@ class PoseNet(nn.Module):
         #     Conv(128, 128, bn=bn),
         #     Conv(128, inp_dim, bn=bn)
         # )
-        self.pre = Backbone(nFeat=inp_dim)
+        self.pre = Backbone(nFeat=inp_dim)  # It doesn't affect the results regardless of which self.pre is used
         self.hourglass = nn.ModuleList([Hourglass(4, inp_dim, increase, bn=bn) for _ in range(nstack)])
         self.features = nn.ModuleList([Features(inp_dim, increase=increase, bn=bn) for _ in range(nstack)])
         # predict 5 different scales of heatmpas per stack, keep in mind to pack the list using ModuleList.

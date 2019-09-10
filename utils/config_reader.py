@@ -2,8 +2,6 @@
 from configobj import ConfigObj
 import numpy as np
 
-# 为了完成demo.py和notebook的运行，从另一个fork的project里拷贝过来的
-
 
 def config_reader():
     config = ConfigObj('/home/jia/Desktop/Improved-Body-Parts/utils/config')
@@ -22,6 +20,7 @@ def config_reader():
     param['starting_range'] = float(param['starting_range'])
     param['ending_range'] = float(param['ending_range'])
     param['scale_search'] = list(map(float, param['scale_search']))  # [float(param['scale_search'])]  #     #
+    param['rotation_search'] = list(map(float, param['rotation_search']))  # [float(param['scale_search'])]  #     #
     param['thre1'] = float(param['thre1'])
     param['thre2'] = float(param['thre2'])
 

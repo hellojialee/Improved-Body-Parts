@@ -104,7 +104,7 @@ if __name__ == '__main__':
 
     # # ######################### Visualize the network ##############
     dummy_input = torch.randn(1, 384, 384, 3)
-    y = pose(dummy_input)
+    y = pose(dummy_input)[0][0]
     print(y.shape)
     # # ############################# netron --host=localhost --port=8080
     # torch.onnx.export(pose, dummy_input, "posenet.onnx")
@@ -112,5 +112,7 @@ if __name__ == '__main__':
     # torch.onnx.export(pose, dummy_input, "posenet2.onnx")
 
     # # ##############  Count the FLOPs of your PyTorch model  ##########################
-    # flops, params = profile(pose, input_size=(1, 256, 192, 3))
-    # print(flops, params)
+    from thop import clever_format
+    flops, params = profile(pose, inputs=(dummy_input,))
+    flops, params = clever_format([flops, params], "%.3f")
+    print(flops, params)

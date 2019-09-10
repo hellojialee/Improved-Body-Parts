@@ -6,6 +6,9 @@ import cv2
 
 
 class Heatmapper:
+    """
+    It can generate the keypoint heatmaps, body part heatmap, offset feature maps in development.
+    """
     # 输入图片的尺寸处理
     # 训练时需要相同大小的图片才能组成一个batch，在openpose中有两种做法：
     # 一是直接resize到指定大小的尺寸;
@@ -306,7 +309,6 @@ def gaussian(sigma, x, u):
 def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01, return_dist=False):  # TODO: change the paf area to ellipse
     """
     这里的distance函数实际上返回的是gauss分布的PAF
-    # 实验发现在46*46尺寸的feature map上生成PAF，每个limb已经很短了，没有必要区分是直线区域还是椭圆区域
     # 点到两个端点所确定的直线的距离　classic formula is:
     # # d = [(x2-x1)*(y1-y)-(x1-x)*(y2-y1)] / sqrt((x2-x1)**2 + (y2-y1)**2)
     """

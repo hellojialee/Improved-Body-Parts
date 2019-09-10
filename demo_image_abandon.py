@@ -7,7 +7,6 @@ import tqdm
 import time
 import cv2
 import torch
-import torch.nn.functional as F
 import torch.optim as optim
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
@@ -15,54 +14,58 @@ from utils.config_reader import config_reader
 from utils import util
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 from models.posenet import NetworkEval
 import warnings
 import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"  # choose the available GPUs
+# os.environ['CUDA_VISIBLE_DEVICES'] = "2"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
-# For visualize
+limbSeq = [[1, 0], [1, 14], [1, 15], [1, 16], [1, 17], [0, 14], [0, 15], [14, 16], [15, 17],
+           [1, 2], [2, 3], [3, 4], [1, 5], [5, 6], [6, 7], [1, 8], [8, 9],
+           [9, 10], [1, 11], [11, 12], [12, 13], [8, 11], [2, 16], [5, 17]]
+
+
+mapIdx = [[0, 1], [2, 3], [4, 5], [6, 7], [8, 9], [10, 11], [12, 13], [14, 15], [16, 17], [18, 19], [20, 21], [22, 23],
+          [24, 25], [26, 27], [28, 29], [30, 31], [32, 33], [34, 35], [36, 37], [38, 39], [40, 41], [42, 43], [44, 45],
+          [46, 47]]
+
+# visualize
 colors = [[	128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [255, 0, 0], [255, 85, 0], [255, 170, 0],
           [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255],
           [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 170],
           [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255]]
 
+dt_gt_mapping = {0: 0, 1: None, 2: 6, 3: 8, 4: 10, 5: 5, 6: 7, 7: 9, 8: 12, 9: 14, 10: 16, 11: 11, 12: 13, 13: 15,
+                 14: 2, 15: 1, 16: 4, 17: 3, 18: None}  # , 18: None 没有使用肚脐
 
 torch.cuda.empty_cache()
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
+parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
     help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
-parser.add_argument('--image', type=str, default='try_image/cocotry4.jpg', help='input image')  # required=True
+parser.add_argument('--image', type=str, default='try_image/v1.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
+
 parser.add_argument('--opt-level', type=str, default='O1')
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)
 
 args = parser.parse_args()
 
-# ###################################  Setup for some configurations ###########################################
+checkpoint_path = args.checkpoint_path
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
-
-
-limbSeq = config.limbs_conn
-dt_gt_mapping = config.dt_gt_mapping
-flip_heat_ord = config.flip_heat_ord
-flip_paf_ord = config.flip_paf_ord
-draw_list = config.draw_list
-# ###############################################################################################################
 
 
 def show_color_vector(oriImg, paf_avg, heatmap_avg):
     hsv = np.zeros_like(oriImg)
     hsv[..., 1] = 255
 
-    mag, ang = cv2.cartToPolar(paf_avg[:, :, 16], 1.5 * paf_avg[:, :, 16])  # 设置不同的系数，可以使得显示颜色不同
+    mag, ang = cv2.cartToPolar(paf_avg[:, :, 19], 1.5 * paf_avg[:, :, 19])  # 设置不同的系数，可以使得显示颜色不同
 
     # 将弧度转换为角度，同时OpenCV中的H范围是180(0 - 179)，所以再除以2
     # 完成后将结果赋给HSV的H通道，不同的角度(方向)以不同颜色表示
@@ -80,26 +83,14 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.imshow(limb_flow, alpha=.5)
     plt.show()
 
-    plt.xticks([])
-    plt.yticks([])
-    plt.imshow(oriImg[:, :, [2, 1, 0]])
-    plt.imshow(paf_avg[:, :, 11], alpha=.5)
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
+    plt.imshow(heatmap_avg[:, :, -2], alpha=.5)
     plt.show()
 
-    plt.xticks([])
-    plt.yticks([])
-    plt.imshow(heatmap_avg[:, :, -1])
-    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show a keypoint
+    # plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
+    plt.imshow(heatmap_avg[:, :, -1], alpha=.5)
     plt.show()
 
-    plt.imshow(heatmap_avg[:, :, -2])
-    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show the person mask
-    plt.show()
-
-    plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
-    plt.imshow(heatmap_avg[:, :, 4], alpha=.5)
-    plt.show()
-    t = 2
 
 
 def process(input_image, params, model_params, heat_layers, paf_layers):
@@ -112,57 +103,37 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], heat_layers))  # fixme if you change the number of keypoints
     paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], paf_layers))
 
+    multiplier = multiplier
     for m in range(len(multiplier)):
         scale = multiplier[m]
-
-        if scale * oriImg.shape[0] > 2300 or scale * oriImg.shape[1] > 3200:
-            scale = min(2300 / oriImg.shape[0], 3200 / oriImg.shape[1])
-            print("Input image is too big, shrink it !")
 
         imageToTest = cv2.resize(oriImg, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)  # cv2.INTER_CUBIC
         imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['max_downsample'],
                                                           model_params['padValue'])
 
         # ################################# Important!  ###########################################
-        # #############################  We use OpenCV to read image (BGR) all the time #######################
-        # Input Tensor: a batch of images within [0,1], required shape in this project : (1, height, width, channels)
-        input_img = np.float32(imageToTest_padded / 255)
+        # Input Tensor: a batch of images within [0,1], required shape (1, height, width, channels)
+        input_img = np.float32(imageToTest_padded[None, ...] / 255)
         # input_img -= np.array(config.img_mean[::-1])  # Notice: OpenCV uses BGR format, reverse the last axises
         # input_img /= np.array(config.img_std[::-1])
-        # ################################## add flip image ################################
-        swap_image = input_img[:, ::-1, :].copy()
-        # plt.imshow(swap_image[:, :, [2, 1, 0]])  # Opencv image format: BGR
-        # plt.show()
-        input_img = np.concatenate((input_img[None, ...], swap_image[None, ...]), axis=0)  # (2, height, width, channels)
-        input_img = torch.from_numpy(input_img).cuda()
-        # ###################################################################################
 
+        input_img = torch.from_numpy(input_img).cuda()
         # output tensor dtype: float 16
         output_tuple = posenet(input_img)
 
-        # ############ different scales can be shown #############
-        output = output_tuple[-1][0].cpu().numpy()
-
+        output = output_tuple[-1][0].cpu().numpy()  # different scales can be shown
         output_blob = output[0].transpose((1, 2, 0))
         output_blob0 = output_blob[:, :, :config.paf_layers]
         output_blob1 = output_blob[:, :, config.paf_layers:config.num_layers]
 
-        output_blob_flip = output[1].transpose((1, 2, 0))
-        output_blob0_flip = output_blob_flip[:, :, :config.paf_layers]  # paf layers
-        output_blob1_flip = output_blob_flip[:, :, config.paf_layers:config.num_layers]  # keypoint layers
-
-        # ################################## flip ensemble ################################
-        output_blob0_avg = (output_blob0 + output_blob0_flip[:, ::-1, :][:, :, flip_paf_ord]) / 2
-        output_blob1_avg = (output_blob1 + output_blob1_flip[:, ::-1, :][:, :, flip_heat_ord]) / 2
-
         # extract outputs, resize, and remove padding
-        heatmap = cv2.resize(output_blob1_avg, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
+        heatmap = cv2.resize(output_blob1, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
                              interpolation=cv2.INTER_CUBIC)
         heatmap = heatmap[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
         heatmap = cv2.resize(heatmap, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
 
         # output_blob0 is PAFs
-        paf = cv2.resize(output_blob0_avg, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
+        paf = cv2.resize(output_blob0, (0, 0), fx=model_params['stride'], fy=model_params['stride'],
                          interpolation=cv2.INTER_CUBIC)
         paf = paf[:imageToTest_padded.shape[0] - pad[2], :imageToTest_padded.shape[1] - pad[3], :]
         paf = cv2.resize(paf, (oriImg.shape[1], oriImg.shape[0]), interpolation=cv2.INTER_CUBIC)
@@ -173,9 +144,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
         heatmap_avg = heatmap_avg + heatmap / len(multiplier)
         paf_avg = paf_avg + paf / len(multiplier)
-
-        heatmap_avg[np.isnan(heatmap_avg)] = 0
-        paf_avg[np.isnan(paf_avg)] = 0
 
         # heatmap_avg = np.maximum(heatmap_avg, heatmap)
         # paf_avg = np.maximum(paf_avg, paf)  # 如果换成取最大，效果会变差，有很多误检
@@ -195,41 +163,45 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # ####################################################################################### #
     # --------------------------------------------------------------------------------------- #
 
-    # smoothing = util.GaussianSmoothing(18, 5, 1)
-    # heatmap_avg_cuda = torch.from_numpy(heatmap_avg.transpose((2, 0, 1))).cuda()[None, ...]
-
-    heatmap_avg = heatmap_avg.astype(np.float32)
-
-    filter_map = heatmap_avg[:, :, :18].copy().transpose((2, 0, 1))[None, ...]
-    filter_map = torch.from_numpy(filter_map).cuda()
-
-    # # #######################   Add Gaussian smooth  #######################
-    # smoothing = util.GaussianSmoothing(18, 7, 1)
-    # filter_map = F.pad(filter_map, (3, 3, 3, 3), mode='reflect')
-    # filter_map = smoothing(filter_map)
-    # # ######################################################################
-
-    filter_map = util.keypoint_heatmap_nms(filter_map, kernel=3, thre=params['thre1'])
-    filter_map = filter_map.cpu().numpy().squeeze().transpose((1, 2, 0))
-
-    for part in range(18):  # 没有对背景（序号19）取非极大值抑制NMS
+    for part in range(18):  # fixme: 没有对背景（序号19）取非极大值抑制NMS
         map_ori = heatmap_avg[:, :, part]
-        # map = gaussian_filter(map_ori, sigma=3)  # 没有高斯滤波貌似效果更好？
+        map = gaussian_filter(map_ori, sigma=3)  # fixme: use gaussian blure?
         # map = map_ori
         # map up 是值
-        peaks_binary = filter_map[:, :, part]
+        map_up = np.zeros(map.shape)  # 为了找到比相邻像素值都大的位置
+        map_up[1:, :] = map[:-1, :]
+        map_down = np.zeros(map.shape)  # todo： NMS with a sliding window of 3*3
+        map_down[:-1, :] = map[1:, :]
+        map_left = np.zeros(map.shape)
+        map_left[:, 1:] = map[:, :-1]
+        map_right = np.zeros(map.shape)
+        map_right[:, :-1] = map[:, 1:]
+
+        # 对于左上角右下角之类相邻的像素也做抑制，变成完全的3*3窗口
+        map_left_up = np.zeros(map.shape)
+        map_left_up[1:, :] = map_left[:-1, :]
+        map_right_up = np.zeros(map.shape)
+        map_right_up[1:, :] = map_right[:-1, :]
+        map_left_down = np.zeros(map.shape)
+        map_left_down[:-1, :] = map_left[1:, :]
+        map_right_down = np.zeros(map.shape)
+        map_right_down[:-1, :] = map_right[1:, :]
+
+        peaks_binary = np.logical_and.reduce((map >= map_left, map >= map_right,
+                                              map >= map_up, map >= map_down, map >= map_right_up,
+                                              map >= map_right_down,
+                                              map >= map_left_up, map >= map_left_down,
+                                              map > params['thre1']))  # fixme: finetue it
+        # reduce 方法和Python的reduce函数类似，它沿着axis轴对array进行操作，
+        # 相当于将<op>运算符插入到沿axis轴的所有子数组或者元素当中。
+        # param['thre1'] = 0.1
 
         peaks = list(zip(np.nonzero(peaks_binary)[1], np.nonzero(peaks_binary)[0]))
         # note reverse. xy坐标系和图像坐标系
         # np.nonzero: Return the indices of the elements that are non-zero
-        # 添加加权坐标计算，根据不同类型关键点弥散程度不同选择加权的范围
-        refined_peaks_with_score = [util.refine_centroid(map_ori, anchor, params['offset_radius']) for anchor in peaks]
-
-        # peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]  # 列表解析式，生产的是list  # refined_peaks
-        # [(205, 484, 0.9319216758012772),
-        #  # (595, 484, 0.777797631919384),
-        id = range(peak_counter, peak_counter + len(refined_peaks_with_score))
-        peaks_with_score_and_id = [refined_peaks_with_score[i] + (id[i],) for i in range(len(id))]
+        peaks_with_score = [x + (map_ori[x[1], x[0]],) for x in peaks]  # 列表解析式，生产的是list
+        id = range(peak_counter, peak_counter + len(peaks))
+        peaks_with_score_and_id = [peaks_with_score[i] + (id[i],) for i in range(len(id))]
         # 为每一个相应peak (parts)都依次编了一个号
 
         all_peaks.append(peaks_with_score_and_id)
@@ -237,7 +209,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         # [(205, 484, 0.9319216758012772, 25),
         # (595, 484, 0.777797631919384, 26),
         # (343, 490, 0.8145177364349365, 27), ....
-        peak_counter += len(peaks)  # refined_peaks
+        peak_counter += len(peaks)
 
     # --------------------------------------------------------------------------------------- #
     # ####################################################################################### #
@@ -248,9 +220,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     connection_all = []
     special_k = []
 
-    # 有多少个limb,就有多少个connection,相对应地就有多少个paf channel
-    for k in range(len(limbSeq)):  # 最外层的循环是某一个limbSeq
-        score_mid = paf_avg[:, :, k]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
+    # 有多少个limb,就有多少个connection,相对应地就有多少个paf指向
+    for k in range(len(mapIdx)):  # 最外层的循环是某一个limbSeq，因为mapIdx个数与之是一致对应的
+        score_mid = paf_avg[:, :, mapIdx[k][0] // 2]  # 某一个channel上limb的响应热图, 它的长宽与原始输入图片大小一致，前面经过resize了
         # score_mid = gaussian_filter(orginal_score_mid, sigma=3)  fixme: use gaussisan blure?
         candA = all_peaks[limbSeq[k][0]]  # all_peaks是list,每一行也是一个list,保存了检测到的特定的parts(joints)
         # 注意具体处理时标号从0还是1开始。从收集的peaks中取出某类关键点（part)集合
@@ -264,7 +236,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                 for j in range(nB):
                     vec = np.subtract(candB[j][:2], candA[i][:2])
                     norm = math.sqrt(vec[0] * vec[0] + vec[1] * vec[1])
-                    mid_num = min(int(round(norm + 1)), params['mid_num'])
+                    mid_num = max(int(norm), 10)
                     # failure case when 2 body parts overlaps
                     if norm == 0:  # 为了跳过出现不同节点相互覆盖出现在同一个位置，也有说norm加一个接近0的项避免分母为0,详见：
                         # https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation/issues/54
@@ -275,6 +247,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                     limb_response = np.array([score_mid[int(round(startend[I][1])), int(round(startend[I][0]))] \
                                       for I in range(len(startend))])
+                    # limb_response 是代表某一个limb通道下的heat map响应
 
                     score_midpts = limb_response
 
@@ -326,7 +299,7 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # candidate[:, 2] *= 0.5  # FIXME: change it? part confidence * 0.5
     # candidate.shape = (94, 4). 列表解析式，两层循环，先从all peaks取，再从sublist中取。 all peaks是两层list
 
-    for k in range(len(limbSeq)):
+    for k in range(len(mapIdx)):
         # ---------------------------------------------------------
         # 外层循环limb  对应论文中，每一个limb就是一个子集，分limb处理,贪心策略?
         # special_K ,表示没有找到关节点对匹配的肢体
@@ -369,7 +342,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                         subset[j][indexB][0] = partBs[i]  # partBs[i]是limb其中一个端点的id号码
                         subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
-                        subset[j][-1][0] += 1  # last number in each row is the total parts number of that person
+                        subset[j][-1][0] += 1
+                        # last number in each row is the total parts number of that person
 
                         # # subset[j][-2][1]用来记录不包括当前新加入的类型节点时的总体初始置信度，引入它是为了避免下次迭代出现同类型关键点，覆盖时重复相加了置信度
                         # subset[j][-2][1] = subset[j][-2][0]  # 因为是不包括此类节点的初始值，所以只会赋值一次 !!
@@ -398,23 +372,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                             subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
 
                             subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
-
-                    #  overlap the reassigned keypoint
-                    #  如果是添加冗余连接的重复的点，用新的更加高的冗余连接概率取代原来连接的相同的关节点的概率
-                    # 这一个改动没啥影响
-                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= connection_all[k][i][2]:
-                        # 否则用当前的limb端点覆盖已经存在的点，并且在这之前，减去已存在关节点的置信度和连接它的limb置信度
-                        if params['len_rate'] * subset[j][-1][1] <= connection_all[k][i][-1]:
-                            continue
-                        # 减去之前的节点置信度和limb置信度
-                        subset[j][-2][0] -= candidate[subset[j][indexB][0].astype(int), 2] + subset[j][indexB][1]
-
-                        # 添加当前节点
-                        subset[j][indexB][0] = partBs[i]
-                        subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
-                        subset[j][-2][0] += candidate[partBs[i].astype(int), 2] + connection_all[k][i][2]
-
-                        subset[j][-1][1] = max(connection_all[k][i][-1], subset[j][-1][1])
+                    else:
+                        pass
 
                 elif found == 2:  # if found 2 and disjoint, merge them (disjoint：不相交)
                     # -----------------------------------------------------
@@ -483,12 +442,12 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                             small_j = j2
                             big_j = j1
                             remove_c = c2
+
                         # 删除和当前limb有连接,并且置信度低的那个人的节点
-                        if params['remove_recon'] > 0:
-                            subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + subset[small_j][remove_c][1]
-                            subset[small_j][remove_c][0] = -1
-                            subset[small_j][remove_c][1] = -1
-                            subset[small_j][-1][0] -= 1
+                        subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + subset[small_j][remove_c][1]
+                        subset[small_j][remove_c][0] = -1  # todo
+                        subset[small_j][remove_c][1] = -1
+                        subset[small_j][-1][0] -= 1
 
                 # if find no partA in the subset, create a new subset
                 # 如果肢体组成的关节点A,B没有被连接到某个人体则组成新的人体
@@ -501,9 +460,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                 #    4.Repeat the step 3 until we are done.
                 # 说明见：　https://arvrjourney.com/human-pose-estimation-using-openpose-with-tensorflow-part-2-e78ab9104fc8
 
-                elif not found and k < len(limbSeq):
-                    # Fixme: 检查一下是否正确
-                    #  原始的时候是 k<18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
+                elif not found and k < 24:
+                    # Fixme: 原始的时候是18,因为我加了limb，所以是24,因为真正的limb是0~16，最后两个17,18是额外的不是limb
                     #  但是后面画limb的时候没有把鼻子和眼睛耳朵的连线画上，要改进
                     row = -1 * np.ones((20, 2))
                     row[indexA][0] = partAs[i]
@@ -559,9 +517,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     #         # 注意x,y坐标谁在前谁在后，在这个project中有点混乱
     #         cv2.circle(canvas, all_peaks[i][j][0:2], 3, colors[i], thickness=-1)
 
+    stickwidth = 3
     # 画所有的骨架
-    color_board = [0, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21]
-    color_idx = 0
+    draw_list = [0] + list(range(5, 22))
     for i in draw_list:  # 画出18个limb　Fixme：我设计了25个limb,画的limb顺序需要调整，相应color数也要增加
         for n in range(len(subset)):
             index = subset[n][np.array(limbSeq[i])][..., 0]
@@ -580,9 +538,9 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
             cv2.circle(cur_canvas, (int(Y[0]), int(X[0])), 4, color=[0, 0, 0], thickness=2)
             cv2.circle(cur_canvas, (int(Y[1]), int(X[1])), 4, color=[0, 0, 0], thickness=2)
-            cv2.fillConvexPoly(cur_canvas, polygon, colors[color_board[color_idx]])
+
+            cv2.fillConvexPoly(cur_canvas, polygon, colors[i])
             canvas = cv2.addWeighted(canvas, 0.4, cur_canvas, 0.6, 0)
-        color_idx += 1
     return canvas
 
 
@@ -613,12 +571,14 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         posenet.cuda()
 
-    from apex import amp
-
-    posenet = amp.initialize(posenet,
-                             opt_level=args.opt_level,
-                             keep_batchnorm_fp32=args.keep_batchnorm_fp32,
-                             loss_scale=args.loss_scale)
+    # from apex import amp
+    #
+    # optimizer = optim.Adam(posenet.parameters())  # Redundant.
+    #
+    # posenet, optimizer = amp.initialize(posenet, optimizer,
+    #                                     opt_level=args.opt_level,
+    #                                     keep_batchnorm_fp32=args.keep_batchnorm_fp32,
+    #                                     loss_scale=args.loss_scale)
     posenet.eval()   # set eval mode is important
 
     tic = time.time()
@@ -641,13 +601,4 @@ if __name__ == '__main__':
     cv2.waitKey(0)
     cv2.destroyAllWindows()
     cv2.imwrite(output, canvas)
-
-    # pdf = PdfPages(output + '.pdf')
-    # plt.figure()
-    # plt.plot(canvas[:, :, [2, 1, 0]])
-    # plt.tight_layout()
-    # plt.show()
-    # pdf.savefig()
-    # plt.close()
-    # pdf.close()
 

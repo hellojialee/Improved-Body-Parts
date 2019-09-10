@@ -7,14 +7,12 @@ import torch
 import numpy as np
 import torch.nn as nn
 import torch.optim as optim
-from torchcontrib.optim.swa import SWA
 import apex.optimizers as apex_optim
 import torch.distributed as dist
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 from data.mydataset import MyDataset
-from torch.utils.data import DataLoader
-from models.posenet import Network
-from utils.util import set_bn_eval, set_bn_eval_fp32
+from torch.utils.data.dataloader import DataLoader
+from models.posenet import Network   # ###########
 from models.loss_model import MultiTaskLoss
 import warnings
 
@@ -30,9 +28,10 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
-parser.add_argument('--swa', action='store_true', default=True, help='swa usage flag (default: off)')
-parser.add_argument('--swa_freq', type=int, default=5, metavar='N', help='frequency of averaging weight (default: 5)')
+parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--freeze', action='store_true', default=False,
+                    help='freeze the pre-trained layers before output layers')
+parser.add_argument('--warmup', action='store_true', default=False, help='using warm-up learning rate')
 parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=10, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
@@ -40,8 +39,7 @@ parser.add_argument('--max_grad_norm', default=10, type=float,
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--opt-level', type=str, default='O1')
-# 因为我们使用了 SWA 训练时不让BN层更新，因此也不需要同步 BN 了
-parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # Freeze BN
+parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
@@ -60,7 +58,7 @@ soureconfig = COCOSourceConfig(opt.hdf5_train_data)
 train_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuffle in data loader
 
 soureconfig_val = COCOSourceConfig(opt.hdf5_val_data)
-val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=True)  # shuffle in data loader
+val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=False)  # shuffle in data loader
 
 
 best_loss = float('inf')
@@ -99,17 +97,26 @@ if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的m
 # It should be called before constructing optimizer if the module will live on GPU while being optimized.
 model.cuda()
 
+for param in model.parameters():
+    if param.requires_grad:
+        print('Parameters of network: Autograd')
+        break
+
+# ######################################## Froze some layers to fine-turn the model  ########################
+if args.freeze:
+    for name, param in model.named_parameters():  # 带有参数名的模型的各个层包含的参数遍历
+        if 'out' or 'merge' or 'before_regress' in name:  # 判断参数名字符串中是否包含某些关键字
+            continue
+        param.requires_grad = False
+# #############################################################################################################
+
 # Actual working batch size on multi-GPUs is 4 times bigger than that on one GPU
 # fixme: add up momentum if the batch grows?
 # fixme: change weight_decay?
 #    nesterov = True
-optimizer = optim.SGD(model.parameters(), lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=2e-4)
+optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
+                      lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
 # optimizer = optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
-
-if args.swa:
-    # SWA: initialize SWA optimizer wrapper
-    print("===========================>  Using SWA training !")
-    optimizer = SWA(optimizer)
 
 
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
@@ -133,9 +140,6 @@ if args.distributed:
     model = DDP(model, delay_allreduce=True)
 
 # ###################################  Resume from checkpoint ###########################################
-# Science we save the batch normalization as half_tensor, we should convert the bn to half when we reload the optimizer
-# model.apply(set_bn_eval)  # freeze layer recursively.
-
 if args.resume:
     # Use a local scope to avoid dangling references
     # dangling references: a variable that refers to an object that was deleted prematurely
@@ -148,27 +152,28 @@ if args.resume:
             from collections import OrderedDict
             new_state_dict = OrderedDict()
             for k, v in checkpoint['weights'].items():
-                # Exclude the regression layer by commenting the following code
-                #if 'out' or 'merge' in k:
-                    #continue
+                # Exclude the regression layer by commenting the following code when we change the output dims!
+                # if 'out' or 'merge' or 'before_regress'in k:
+                #     continue
                 name = 'module.' + k  # add prefix 'module.'
                 new_state_dict[name] = v
-            model.load_state_dict(new_state_dict)  # , strict=False
+            model.load_state_dict(new_state_dict, strict=False)  # , strict=False
             # # #################################################
+
             # model.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
             print('Network weights have been resumed from checkpoint...')
 
             # # We must convert the resumed state data of optimizer to gpu
-            # """It's because the previous training was done on gpu, so when saving the optimizer.state_dict, the stored
+            # """It is because the previous training was done on gpu, so when saving the optimizer.state_dict, the stored
             #  states(tensors) are of cuda version. During resuming, when we load the saved optimizer, load_state_dict()
             #  loads this cuda version to cpu. But in this project, we use map_location to map the state tensors to cpu.
             #  In the training process, we need cuda version of state tensors, so we have to convert them to gpu."""
-            # optimizer.load_state_dict(checkpoint['optimizer_weight'])
-            # for state in optimizer.state.values():
-            #     for k, v in state.items():
-            #         if torch.is_tensor(v):
-            #             state[k] = v.cuda()
-            # print('Optimizer has been resumed from checkpoint...')
+            optimizer.load_state_dict(checkpoint['optimizer_weight'])
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if torch.is_tensor(v):
+                        state[k] = v.cuda()
+            print('Optimizer has been resumed from checkpoint...')
             global best_loss, start_epoch  # global declaration. otherwise best_loss and start_epoch can not be changed
             best_loss = checkpoint['train_loss']
             print('******************** Best loss resumed is :', best_loss, '  ************************')
@@ -192,9 +197,9 @@ if args.distributed:
 
 # 创建数据加载器，在训练和验证步骤中喂数据
 train_loader = torch.utils.data.DataLoader(train_data, batch_size=opt.batch_size, shuffle=(train_sampler is None),
-                                           num_workers=16, pin_memory=True, sampler=train_sampler, drop_last=True)
+                                           num_workers=2, pin_memory=True, sampler=train_sampler, drop_last=True)
 val_loader = torch.utils.data.DataLoader(val_data, batch_size=opt.batch_size, shuffle=False,
-                                         num_workers=4, pin_memory=True, sampler=val_sampler, drop_last=True)
+                                         num_workers=2, pin_memory=True, sampler=val_sampler, drop_last=True)
 
 for param in model.parameters():
     if param.requires_grad:
@@ -212,15 +217,11 @@ def train(epoch):
     torch.cuda.empty_cache()
     model.train()
     # DistributedSampler 中记录目前的 epoch 数， 因为采样器是根据 epoch 来决定如何打乱分配数据进各个进程
-
-    # Freeze the Batch normalization layers
-    # You should use apply instead of searching its children, named_children() doesn’t iteratively search submodules.
-    model.apply(set_bn_eval)  # freeze layer recursively.
-
     if args.distributed:
         train_sampler.set_epoch(epoch)
     # scheduler.step()  use 'adjust learning rate' instead
-    adjust_learning_rate_cyclic(optimizer, epoch, start_epoch, args.swa_freq)  # start_epoch
+
+    # adjust_learning_rate_cyclic(optimizer, epoch, start_epoch)  # start_epoch
     print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
 
     batch_time = AverageMeter()
@@ -229,10 +230,10 @@ def train(epoch):
 
     for batch_idx, target_tuple in enumerate(train_loader):
         # # ##############  Use schedule step or fun of 'adjust learning rate' #####################
-        # adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader), use_warmup=True)
+        adjust_learning_rate(optimizer, epoch, batch_idx, len(train_loader), use_warmup=args.warmup)
         # print('\nLearning rate at this epoch is: %0.9f\n' % optimizer.param_groups[0]['lr'])  # scheduler.get_lr()[0]
         # # ##########################################################
-        if use_cuda:  # FIXME: 需要第一个元素是输入到网络中的才行？
+        if use_cuda:
             #  这允许异步 GPU 复制数据也就是说计算和数据传输可以同时进.
             target_tuple = [target_tensor.cuda(non_blocking=True) for target_tensor in target_tuple]
 
@@ -242,7 +243,7 @@ def train(epoch):
         # loc_targets = Variable(loc_targets)
         # conf_targets = Variable(conf_targets)
         optimizer.zero_grad()  # zero the gradient buff
-        loss = model(target_tuple)  # images, target_tuple[1:]
+        loss = model(target_tuple)
 
         if loss.item() > 2e5:  # try to rescue the gradient explosion
             print("\nOh My God ! \nLoss is abnormal, drop this batch !")
@@ -300,8 +301,15 @@ def train(epoch):
         if losses.avg < float('inf'):  # < best_loss
             # Update the best_loss if the average loss drops
             best_loss = losses.avg
-
-        return losses.avg
+            print('\nSaving model checkpoint...\n')
+            state = {
+                # not posenet.state_dict(). then, we don't ge the "module" string to begin with
+                'weights': model.module.state_dict(),
+                'optimizer_weight': optimizer.state_dict(),
+                'train_loss': losses.avg,
+                'epoch': epoch
+            }
+            torch.save(state, './' + checkpoint_path + '/PoseNet_' + str(epoch) + '_epoch.pth')
 
 
 def test(epoch):
@@ -359,7 +367,27 @@ def test(epoch):
         logger.close()
 
 
-def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqent=5, lr_max=4e-5, lr_min=1e-5):
+def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
+    factor = epoch // 10
+
+    if epoch >= 78:
+        factor = (epoch - 78) // 5
+
+    lr = opt.learning_rate * args.world_size * (0.2**factor)
+
+    """Warmup"""
+    if use_warmup:
+        if epoch < 3:
+            lr = lr * float(1 + step + epoch * len_epoch) / (3. * len_epoch)  # len_epoch=len(train_loader)
+
+    # if(args.local_rank == 0):
+    #     print("epoch = {}, step = {}, lr = {}".format(epoch, step, lr))
+
+    for param_group in optimizer.param_groups:
+        param_group['lr'] = lr
+
+
+def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqent=5, lr_max=4e-5, lr_min=2e-5):
     epoch = current_epoch - start_epoch
 
     lr = lr_max - (lr_max - lr_min) / (swa_freqent - 1) * (epoch - epoch // swa_freqent * swa_freqent)
@@ -398,35 +426,6 @@ def reduce_tensor(tensor):
 
 if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 100):
-
-        train_loss = train(epoch)
+        train(epoch)
         test(epoch)
-
-        if args.local_rank == 0:
-
-            if args.swa and (epoch - start_epoch) % args.swa_freq == args.swa_freq - 1:
-                print("========================================> Update the SWA running averages !")
-
-                # ################# Update the SWA running averages whenever you want  #################
-                # We update at the lowest values of the LR within each cycle
-                model.swa = True  # If we set swa=True, then the loss will not be computed
-                optimizer.update_swa()
-
-                optimizer.swap_swa_sgd()
-                # optimizer.bn_update(train_loader, model, device='cuda')  # BN is frozen, dose not need update in SWA
-
-                # To continue training `swap_swa_sgd` should be called again
-                optimizer.swap_swa_sgd()
-                model.swa = False
-
-            # Save the model each epoch
-            print('\nSaving model checkpoint...\n')
-            state = {
-                # not posenet.state_dict(). then, we don't ge the "module" string to begin with
-                'weights': model.module.state_dict(),
-                'optimizer_weight': optimizer.state_dict(),
-                'train_loss': train_loss,
-                'epoch': epoch
-            }
-            torch.save(state, './' + checkpoint_path + '/PoseNet_' + str(epoch) + '_epoch.pth')
 

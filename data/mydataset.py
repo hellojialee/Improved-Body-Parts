@@ -65,4 +65,4 @@ if __name__ == '__main__':  # for debug
 
     val_client = MyDataset(config, soureconfig, shuffle=True, augment=True)  # shuffle in data loader
     # test the data generator
-    test_augmentation_speed(val_client, True)
+    test_augmentation_speed(val_client, False)
