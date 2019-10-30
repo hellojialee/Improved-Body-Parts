@@ -1,6 +1,7 @@
 # SimplePose
 
 Code and pre-trained models for our paper.
+The old repo which can be referred is [**Here**](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
 ## Introduction
 
