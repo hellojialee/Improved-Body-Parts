@@ -311,7 +311,7 @@ class SELayer(nn.Module):
 
 if __name__ == '__main__':
 
-    se = SELayer(6)
+    se = SELayer(256)
     print(se)
     dummy_input = torch.randn(8, 256, 128, 128)
     out = se(dummy_input)

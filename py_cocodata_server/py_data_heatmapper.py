@@ -333,7 +333,7 @@ def distances(X, Y, sigma, x1, y1, x2, y2, thresh=0.01, return_dist=False):  # T
 
     guass_dist = gaussian(sigma, dist, 0)
     # TODO: 下一个换成# =0.01
-    guass_dist[guass_dist <= 0.01] = 0   # thresh  # 0.67的L2用的是0  # 0.68 flocal 用的=thresh 同前面的关键点响应，太远的不要
+    guass_dist[guass_dist <= thresh] = 0.02   # thresh  # 0.67的L2用的是0  # 0.68 flocal 用的=thresh 同前面的关键点响应，太远的不要
     # b = thre
     # guass_dist[dist >= b] = 0
 
