@@ -226,7 +226,7 @@ class Hourglass(nn.Module):
                                      bn=self.bn),
                        self.convBlock(self.nFeat + self.increase * depth_id, self.nFeat + self.increase * depth_id,
                                      # ######### Index: 3
-                                     bn=self.bn),  # 添加一个Conve精细化上采样的特征图?
+                                     bn=self.bn),  # 添加一个Conv精细化上采样的特征图?
                        ]
         return pack_layers
 
@@ -290,7 +290,7 @@ class SELayer(nn.Module):
         :param reduction: channel compression ratio
         :return output the tensor with the same shape of input
         """
-        assert inp_dim > reduction, "Make sure your input channel bigger than reduction which equals to {}".format(reduction)
+        assert inp_dim > reduction, f"Make sure your input channel bigger than reduction which equals to {reduction}"
         super(SELayer, self).__init__()
         self.avg_pool = nn.AdaptiveAvgPool2d(1)
         self.fc = nn.Sequential(
@@ -311,7 +311,7 @@ class SELayer(nn.Module):
 
 if __name__ == '__main__':
 
-    se = SELayer(256)
+    se = SELayer(6)
     print(se)
     dummy_input = torch.randn(8, 256, 128, 128)
     out = se(dummy_input)

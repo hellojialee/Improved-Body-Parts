@@ -12,11 +12,12 @@ import torch.distributed as dist
 from config.config import GetConfig, COCOSourceConfig, TrainingOpt
 from data.mydataset import MyDataset
 from torch.utils.data.dataloader import DataLoader
-from models.posenet import Network   # ###########
+from models.posenet import Network
 from models.loss_model import MultiTaskLoss
 import warnings
 
 try:
+    import apex.optimizers as apex_optim
     from apex.parallel import DistributedDataParallel as DDP
     from apex.fp16_utils import *
     from apex import amp
@@ -28,10 +29,10 @@ except ImportError:
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
-parser.add_argument('--resume', '-r', action='store_true', default=False, help='resume from checkpoint')
+parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--freeze', action='store_true', default=False,
                     help='freeze the pre-trained layers before output layers')
-parser.add_argument('--warmup', action='store_true', default=False, help='using warm-up learning rate')
+parser.add_argument('--warmup', action='store_true', default=True, help='using warm-up learning rate')
 parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=10, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
@@ -44,8 +45,10 @@ parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
 
-
+# ##############################################################################################################
 # ###################################  Setup for some configurations ###########################################
+# ##############################################################################################################
+
 torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
 use_cuda = torch.cuda.is_available()
 
@@ -102,7 +105,9 @@ for param in model.parameters():
         print('Parameters of network: Autograd')
         break
 
+# ##############################################################################################################
 # ######################################## Froze some layers to fine-turn the model  ########################
+# ##############################################################################################################
 if args.freeze:
     for name, param in model.named_parameters():  # 带有参数名的模型的各个层包含的参数遍历
         if 'out' or 'merge' or 'before_regress' in name:  # 判断参数名字符串中是否包含某些关键字
@@ -114,9 +119,11 @@ if args.freeze:
 # fixme: add up momentum if the batch grows?
 # fixme: change weight_decay?
 #    nesterov = True
+# optimizer = apex_optim.FusedSGD(filter(lambda p: p.requires_grad, model.parameters()),
+#                                 lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
 optimizer = optim.SGD(filter(lambda p: p.requires_grad, model.parameters()),
                       lr=opt.learning_rate * args.world_size, momentum=0.9, weight_decay=5e-4)
-# optimizer = optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
+# optimizer = apex_optim.FusedAdam(model.parameters(), lr=opt.learning_rate * args.world_size, weight_decay=1e-4)
 
 
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
@@ -151,6 +158,7 @@ if args.resume:
             # #################################################
             from collections import OrderedDict
             new_state_dict = OrderedDict()
+            # # #################################################
             for k, v in checkpoint['weights'].items():
                 # Exclude the regression layer by commenting the following code when we change the output dims!
                 # if 'out' or 'merge' or 'before_regress'in k:
@@ -159,11 +167,13 @@ if args.resume:
                 new_state_dict[name] = v
             model.load_state_dict(new_state_dict, strict=False)  # , strict=False
             # # #################################################
-
             # model.load_state_dict(checkpoint['weights'])  # 加入他人训练的模型，可能需要忽略部分层，则strict=False
             print('Network weights have been resumed from checkpoint...')
 
-            # # We must convert the resumed state data of optimizer to gpu
+            # amp.load_state_dict(checkpoint['amp'])
+            # print('AMP loss_scalers and unskipped steps have been resumed from checkpoint...')
+
+            # ############## We must convert the resumed state data of optimizer to gpu  ##############
             # """It is because the previous training was done on gpu, so when saving the optimizer.state_dict, the stored
             #  states(tensors) are of cuda version. During resuming, when we load the saved optimizer, load_state_dict()
             #  loads this cuda version to cpu. But in this project, we use map_location to map the state tensors to cpu.
@@ -306,6 +316,7 @@ def train(epoch):
                 # not posenet.state_dict(). then, we don't ge the "module" string to begin with
                 'weights': model.module.state_dict(),
                 'optimizer_weight': optimizer.state_dict(),
+                # 'amp': amp.state_dict(),
                 'train_loss': losses.avg,
                 'epoch': epoch
             }
@@ -368,7 +379,7 @@ def test(epoch):
 
 
 def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
-    factor = epoch // 10
+    factor = epoch // 15
 
     if epoch >= 78:
         factor = (epoch - 78) // 5
@@ -378,6 +389,7 @@ def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
     """Warmup"""
     if use_warmup:
         if epoch < 3:
+            # print('=============>  Using warm-up learning rate....')
             lr = lr * float(1 + step + epoch * len_epoch) / (3. * len_epoch)  # len_epoch=len(train_loader)
 
     # if(args.local_rank == 0):

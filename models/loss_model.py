@@ -50,8 +50,10 @@ class MultiTaskLoss(nn.Module):
         # pred_offset = pred[:, :, self.offset_start:]
 
         gt_heatmaps = F.adaptive_avg_pool2d(target[1], output_size=pred.shape[-2:])  # type: torch.Tensor
+        # gt_heatmaps = F.interpolate(target[1], size=pred.shape[-2:], mode='bilinear')  # type: torch.Tensor
         # gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_misses = F.interpolate(target[0], size=pred.shape[-2:], mode='bilinear')  # type: torch.Tensor
+        # gt_mask_misses = F.adaptive_avg_pool2d(target[0], output_size=pred.shape[-2:])
 
         # gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
         # # gt_mask_offsets = F.adaptive_max_pool2d(target[3], output_size=pred.shape[-2:])
@@ -114,7 +116,7 @@ class MultiTaskLoss(nn.Module):
         # https://discuss.pytorch.org/t/very-strange-behavior-change-one-element-of-a-tensor-will-influence-all-elements/41190
         mask = mask_miss.expand_as(sxing).clone()            # type: torch.Tensor
         del mask_miss
-        mask[:, :, -2, :, :] = multi_task_weight   # *= 改成了 = , 让person mask 学会分辨人群
+        mask[:, :, -2, :, :] *= multi_task_weight   # *= 改成了 = , 让person mask 学会分辨人群
         mask[:, :, heat_start:bkg_start, :, :] *= keypoint_task_weight  # 注意是在mask miss基础上乘以 ×
 
         out = (s - sxing) ** 2 * mask  # type: torch.Tensor # 除以2是为了抵消平方的微分
@@ -142,7 +144,7 @@ class MultiTaskLoss(nn.Module):
         # s = torch.clamp(s, eps, 1. - eps)  # improve the stability of the focal loss
         mask = mask_miss.expand_as(sxing).clone()  # type: torch.Tensor
         del mask_miss
-        mask[:, :, -2, :, :] = multi_task_weight  # except for person mask channel
+        mask[:, :, -2, :, :] *= multi_task_weight  # except for person mask channel
         mask[:, :, heat_start:bkg_start, :, :] *= keypoint_task_weight
 
         st = torch.where(torch.ge(sxing, 0.01), s - alpha, 1 - s - beta)  # 0.01 # ap=0.68用的是0.008

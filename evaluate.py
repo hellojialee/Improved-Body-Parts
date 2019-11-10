@@ -9,6 +9,7 @@ import numpy as np
 from itertools import product
 from scipy.ndimage.filters import gaussian_filter
 import tqdm
+import time
 import cv2
 import torch
 import torch.nn.functional as F
@@ -60,6 +61,25 @@ flip_paf_ord = config.flip_paf_ord
 # ###############################################################################################################
 
 
+class AverageMeter(object):
+    """Computes and stores the average and current value"""
+    def __init__(self):
+        self.val = 0
+        self.avg = 0
+        self.sum = 0
+        self.count = 0
+
+    def update(self, val, n=1):
+        self.val = val
+        self.sum += val * n
+        self.count += n
+        self.avg = self.sum / self.count
+
+
+# ######################################  For evaluating time ######################################
+batch_time = AverageMeter()
+
+
 def predict(image, params, model, model_params, heat_layers, paf_layers, input_image_path):
     # print (image.shape)
     heatmap_avg = np.zeros((image.shape[0], image.shape[1], heat_layers))
@@ -76,7 +96,7 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
             print("Input image: '{}' is too big, shrink it!".format(input_image_path))
 
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
-        imageToTest_padded, pad = util.center_pad(imageToTest, model_params['max_downsample'],
+        imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['max_downsample'],
                                                            model_params['padValue'])
 
         # ################################# Important!  ###########################################
@@ -482,9 +502,21 @@ def process(input_image_path, params, model, model_params, heat_layers, paf_laye
     torch.cuda.empty_cache()
     heatmap, paf = predict(oriImg, params, model, model_params, heat_layers, paf_layers, input_image_path)
 
+    end = time.time()  # ############# Evaluating the keypoint assignment algorithm ######
+
     all_peaks = find_peaks(heatmap, params)
     connection_all, special_k = find_connections(all_peaks, paf, oriImg.shape[0], params)
     subset, candidate = find_people(connection_all, special_k, all_peaks, params)
+
+    batch_time.update((time.time() - end))
+    if show_eval_speed:
+        print('==================>Test: [{0}/{1}]\t'
+              'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
+              'Speed {2:.3f} ({3:.3f})\t'.format(
+            1, 1,
+            1 / batch_time.val,
+            1 / batch_time.avg,
+            batch_time=batch_time))
 
     keypoints = []
     for s in subset[..., 0]:
@@ -517,6 +549,7 @@ def predict_many(coco, images_directory, validation_ids, params, model, model_pa
     assert (not set(validation_ids).difference(set(coco.getImgIds())))
 
     keypoints = {}
+
     for image_id in tqdm.tqdm(validation_ids):
         image_name = get_image_name(coco, image_id)
         image_name = os.path.join(images_directory, image_name)
@@ -555,19 +588,19 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
 
     # # # #############################################################################
     # 在验证集上测试代码
-    # annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
-    # print(annFile)
-    # cocoGt = COCO(annFile)
-    #
-    # if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-    #     validation_ids = cocoGt.getImgIds()[:10]  # [:100] 在这里可以设置validate图片的大小
+    annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
+    print(annFile)
+    cocoGt = COCO(annFile)
+
+    if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
+        validation_ids = cocoGt.getImgIds()[:250]  # [:100] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
     # 在test数据集上测试代码
-    annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
-    cocoGt = COCO(annFile)
-    validation_ids = cocoGt.getImgIds()
+    # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
+    # cocoGt = COCO(annFile)
+    # validation_ids = cocoGt.getImgIds()
     # #############################################################################
 
     resFile = '%s/results/%s_%s_%s100_results.json'
@@ -607,8 +640,11 @@ if __name__ == "__main__":
 
     params, model_params = config_reader()
 
+    # show keypoint assignment algorithm speed
+    show_eval_speed = False
+
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_52_512_input_5scale_float', dataset='test2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_52_512_input_1scale_max', dataset='val2017')  # 'val2017'
 
     print('over!')
 

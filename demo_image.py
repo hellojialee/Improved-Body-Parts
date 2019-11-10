@@ -22,7 +22,7 @@ import os
 import argparse
 
 
-os.environ['CUDA_VISIBLE_DEVICES'] = "1"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 # For visualize
@@ -81,7 +81,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.show()
 
     plt.imshow(oriImg[:, :, [2, 1, 0]])
-    plt.imshow(paf_avg[:, :, 11], alpha=.25)
+    plt.imshow(paf_avg[:, :, 11], alpha=.6)
     plt.show()
 
     plt.imshow(heatmap_avg[:, :, -1])
@@ -89,7 +89,7 @@ def show_color_vector(oriImg, paf_avg, heatmap_avg):
     plt.show()
 
     plt.imshow(heatmap_avg[:, :, -2])
-    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.25)  # show the person mask
+    plt.imshow(oriImg[:, :, [2, 1, 0]], alpha=0.5)  # show the person mask
     plt.show()
 
     plt.imshow(oriImg[:, :, [2, 1, 0]])  # show a keypoint
@@ -647,3 +647,9 @@ if __name__ == '__main__':
     # plt.close()
     # pdf.close()
 
+    # dummy_input = torch.randn(1, 384, 384, 3)
+    # from thop import profile
+    # from thop import clever_format
+    # flops, params = profile(posenet, inputs=(dummy_input,))
+    # flops, params = clever_format([flops, params], "%.3f")
+    # print(flops, params)

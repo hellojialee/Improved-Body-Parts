@@ -8,6 +8,8 @@ from config.config import GetConfig, COCOSourceConfig
 from time import time
 import matplotlib.pyplot as plt
 import cv2
+import torch.nn.functional as F
+import torch
 
 
 class MyDataset(Dataset):
@@ -54,7 +56,7 @@ if __name__ == '__main__':  # for debug
                 # mask_miss = cv2.resize(mask_miss, image.shape[:2], interpolation=cv2.INTER_NEAREST)
                 image = cv2.resize(image, mask_miss.shape[:2], interpolation=cv2.INTER_NEAREST)
                 plt.imshow(image[:, :, [2, 1, 0]])   # Opencv image format: BGR
-                plt.imshow(labels.transpose((1, 2, 0))[:,:,-5], alpha=0.5)  # mask_all
+                plt.imshow(labels.transpose((1, 2, 0))[:,:,20], alpha=0.5)  # mask_all
                 # plt.imshow(show_labels[:, :, 3], alpha=0.5)  # mask_all
                 plt.show()
                 t=2
@@ -65,4 +67,4 @@ if __name__ == '__main__':  # for debug
 
     val_client = MyDataset(config, soureconfig, shuffle=True, augment=True)  # shuffle in data loader
     # test the data generator
-    test_augmentation_speed(val_client, False)
+    test_augmentation_speed(val_client, True)
