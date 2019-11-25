@@ -1,27 +1,28 @@
 # SimplePose
 
-Code and pre-trained models for our paper.
-The old repo which can be referred is [**Here**](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
+Code and pre-trained models for our paper, “Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation”, accepted by AAAI-2020.
+
+Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation using Body Parts" (under review). The **Part A** is available at [this link](https://pan.baidu.com/s/1X7nGC-7CliP1iKgIfsBMUg).
 
 ## Introduction
 
 A bottom-up approach for the problem of multi-person pose estimation.
-The  source code will be improved as soon as the paper is accepted and more instructions will be added.
+![heatmap](visulizatoin/2987.Figure2.png)
+
+![network](visulizatoin/2987.Figure3.png)
 
 ### Contents
 
-1. Training 
+1. Training  
 2. Evaluation 
 3. Demo
 
-### Task Lists
-- [ ] Rewrite and speed up the code of keypoint assignment in C++  with multiple processes.
-
-
 ## Project Features
+
 - Implement the models using Pytorch in auto mixed-precision.
 - Supprot training on multiple GPUs (over 90% GPU usage rate on each GPU card).
 - Fast data preparing and augmentation during training.
+- **This project can also serve as a detailed practice to the green hand in Pytorch.**
 
 ## Prepare
 
@@ -31,13 +32,9 @@ The  source code will be improved as soon as the paper is accepted and more inst
 
 2. Download the COCO dataset.
 
-3. Download the pre-trained models.
+3. Download the pre-trained models (default configuration: download the pretrained model snapshotted at epoch 52 provided as follow).
 
-   According to AAAI Blind Review Instructions:
-
-   > Submissions should not contain pointers to supplemental material on the web.
-
-   Download Link: we will complete this after AAAI review period.
+   Download Link: [BaiduCloud](https://pan.baidu.com/s/1X7nGC-7CliP1iKgIfsBMUg)
 
 4. Change the paths in the code according to your environment.
 
@@ -71,8 +68,12 @@ python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 
 ## Referred Repositories (mainly)
 
--  [Realtime Multi-Person Pose Estimation verson 1](we will complete this link after AAAI review period)
--  [Realtime Multi-Person Pose Estimation verson 2](we will complete this link after AAAI review period)
--  [Realtime Multi-Person Pose Estimation version 3](we will complete this link after AAAI review period)
--  [Associative Embedding](we will complete this link after AAAI review period)
--  [NVIDIA/apex](we will complete this link after AAAI review period)
+- [Realtime Multi-Person Pose Estimation verson 1](https://github.com/michalfaber/keras_Realtime_Multi-Person_Pose_Estimation)
+- [Realtime Multi-Person Pose Estimation verson 2](https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation)
+- [Realtime Multi-Person Pose Estimation version 3](https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation)
+- [Associative Embedding](https://github.com/princeton-vl/pose-ae-train)
+- [NVIDIA/apex](https://github.com/NVIDIA/apex)
+
+## Citation
+
+Please cite this paper kindly in your publications if it helps you.

@@ -18,7 +18,8 @@ class TrainingOpt:
     scale_weight = [0.1, 0.2, 0.4, 1.6, 6.4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
     multi_task_weight = 0.1  # person mask loss vs keypoint loss
     keypoint_task_weight = 3  # keypoint heatmap loss vs body part heatmap loss
-    ckpt_path = './link2checkpoints_distributed/PoseNet_52_epoch.pth'  # 102 epoch AP=0.658
+    # Download the pre-trained model snapshotted at epoch 52 first.
+    ckpt_path = './link2checkpoints_distributed/PoseNet_52_epoch.pth'
 
 
 class TransformationParams:

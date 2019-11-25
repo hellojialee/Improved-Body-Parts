@@ -1,0 +1,9 @@
+# Created by .ignore support plugin (hsz.mobi)
+### Example user template template
+### Example user template
+
+# IntelliJ project files
+.idea
+*.iml  # IntelliJ IDEA 自动创建的模板文件，用于java应用开发
+out
+gen
