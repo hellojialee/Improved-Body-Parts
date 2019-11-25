@@ -4,6 +4,6 @@
 
 # IntelliJ project files
 .idea
-*.iml  # IntelliJ IDEA 自动创建的模板文件，用于java应用开发
+*.iml
 out
 gen
