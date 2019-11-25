@@ -7,6 +7,7 @@ Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimati
 ## Introduction
 
 A bottom-up approach for the problem of multi-person pose estimation.
+
 ![heatmap](visulizatoin/2987.Figure2.png)
 
 ![network](visulizatoin/2987.Figure3.png)
@@ -63,8 +64,6 @@ Multiple GUPs are recommended to use to speed up the training process, but we su
 ```shell
 python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 ```
-
-
 
 ## Referred Repositories (mainly)
 
