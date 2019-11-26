@@ -82,7 +82,7 @@ python-dateutil==2.7.5
 python-json-logger==0.1.11
 pytz==2018.7
 PyWavelets==1.0.3
-PyYAML==3.13
+PyYAML==5.1
 pyzmq==17.1.2
 qtconsole==4.4.4
 requests==2.21.0
