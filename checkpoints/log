@@ -1,0 +1,8 @@
+
+train_loss of epoch 14 : 138.844842091805
+val_loss of epoch 14 : 412.96102142333984
+train_loss of epoch 15 : 138.28183972716283
+val_loss of epoch 15 : 391.1111755371094
+train_loss of epoch 20 : 129.68406759829176
+val_loss of epoch 20 : 113.78171284993489
+val_loss of epoch 20 : 134.3997599283854
