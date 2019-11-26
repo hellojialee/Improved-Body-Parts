@@ -1,6 +1,6 @@
 # SimplePose
 
-Code and pre-trained models for our paper, “Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation”, accepted by AAAI-2020.
+Code and pre-trained models for our paper, [“Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation”](https://arxiv.org/abs/1911.10529), accepted by AAAI-2020. 
 
 Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation using Body Parts" (under review). The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
@@ -75,4 +75,16 @@ python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 
 ## Citation
 
-Please cite this paper kindly in your publications if it helps you.
+Please kindly cite this paper in your publications if it helps your research.
+
+```
+@misc{li2019simple,
+    title={Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation},
+    author={Jia Li and Wen Su and Zengfu Wang},
+    year={2019},
+    eprint={1911.10529},
+    archivePrefix={arXiv},
+    primaryClass={cs.CV}
+}
+```
+
