@@ -14,7 +14,8 @@ class TrainingOpt:
     hourglass_inp_dim = 256
     increase = 128  # increased channels once down-sampling in the hourglass networks
     nstack_weight = [1, 1, 1, 1]  # weight the losses between different stacks, stack 1, stack 2, stack 3...
-    scale_weight = [0.1, 0.2, 0.4, 1.6, 6.4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
+    scale_weight = [0.1, 0.2, 0.4, 1.6,
+                    6.4]  # weight the losses between different scales, scale 128, scale 64, scale 32...
     multi_task_weight = 0.1  # person mask loss vs keypoint loss
     keypoint_task_weight = 3  # keypoint heatmap loss vs body part heatmap loss
     ckpt_path = './link2checkpoints_distributed/PoseNet_102_epoch.pth'  # 102 epoch AP=0.658
@@ -22,6 +23,7 @@ class TrainingOpt:
 
 class TransformationParams:
     """ Hyper-parameters """
+
     def __init__(self, stride):
         #  TODO: tune # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/issues/16
         #   We will firstly scale picture so that the height of the main person always will be 0.6 of picture.
@@ -47,6 +49,7 @@ class TransformationParams:
 
 class CanonicalConfig:
     """Config used in ouf project"""
+
     def __init__(self):
         self.width = 384
         self.height = 384
@@ -74,7 +77,7 @@ class CanonicalConfig:
         self.limb_to = ['nose', 'Reye', 'Leye', 'Rear', 'Lear', 'Reye', 'Leye', 'Rear', 'Lear', 'Rsho', 'Relb', 'Rwri',
                         'Lsho', 'Lelb', 'Lwri',
                         'Rhip', 'Rkne', 'Rank', 'Lhip', 'Lkne', 'Lank',
-                          'Rsho', 'Lsho', 'Rhip', 'Lkne', 'Lhip',  'Rkne', 'Rsho', 'Lsho', 'Lhip']
+                        'Rsho', 'Lsho', 'Rhip', 'Lkne', 'Lhip', 'Rkne', 'Rsho', 'Lsho', 'Lhip']
 
         self.limb_from = [self.parts_dict[n] for n in self.limb_from]
         self.limb_to = [self.parts_dict[n] for n in self.limb_to]
@@ -131,6 +134,7 @@ class CanonicalConfig:
 
 class COCOSourceConfig:
     """Original config used in COCO dataset"""
+
     def __init__(self, hdf5_source):
         """
         Instantiate a COCOSource Config object，

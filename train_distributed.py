@@ -25,7 +25,6 @@ try:
 except ImportError:
     raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
@@ -33,14 +32,15 @@ parser.add_argument('--resume', '-r', action='store_true', default=True, help='r
 parser.add_argument('--freeze', action='store_true', default=False,
                     help='freeze the pre-trained layers before output layers')
 parser.add_argument('--warmup', action='store_true', default=True, help='using warm-up learning rate')
-parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
+parser.add_argument('--checkpoint_path', '-p', default='link2checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=10, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
                           "re-normalize it to have the norm equal to max_grad_norm"))
 # FOR DISTRIBUTED:  Parse for the local_rank argument, which will be supplied automatically by torch.distributed.launch.
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--opt-level', type=str, default='O1')
-parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
+parser.add_argument('--sync_bn', action='store_true', default=True,
+                    help='enabling apex sync BN.')  # 无触发为false， -s 触发为true
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
@@ -62,7 +62,6 @@ train_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuf
 
 soureconfig_val = COCOSourceConfig(opt.hdf5_val_data)
 val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=False)  # shuffle in data loader
-
 
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
@@ -93,9 +92,9 @@ if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的m
     #  because DDP needs to see the finalized model parameters
     # We rely on torch distributed for synchronization between processes. Only DDP support the apex sync_bn now.
     import apex
+
     print("Using apex synced BN.")
     model = apex.parallel.convert_syncbn_model(model)
-
 
 # It should be called before constructing optimizer if the module will live on GPU while being optimized.
 model.cuda()
@@ -153,7 +152,8 @@ if args.resume:
     def resume():
         if os.path.isfile(opt.ckpt_path):
             print('Resuming from checkpoint ...... ')
-            checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
+            checkpoint = torch.load(opt.ckpt_path,
+                                    map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
 
             # #################################################
             from collections import OrderedDict
@@ -192,8 +192,9 @@ if args.resume:
             del checkpoint
         else:
             print("========> No checkpoint found at '{}'".format(opt.ckpt_path))
-    resume()
 
+
+    resume()
 
 train_sampler = None
 val_sampler = None
@@ -290,11 +291,11 @@ def train(epoch):
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Speed {3:.3f} ({4:.3f})\t'
                       'Loss {loss.val:.10f} ({loss.avg:.4f}) <================ \t'.format(
-                        epoch, batch_idx, len(train_loader),
-                        args.world_size * opt.batch_size / batch_time.val,
-                        args.world_size * opt.batch_size / batch_time.avg,
-                        batch_time=batch_time,
-                        loss=losses))
+                    epoch, batch_idx, len(train_loader),
+                    args.world_size * opt.batch_size / batch_time.val,
+                    args.world_size * opt.batch_size / batch_time.avg,
+                    batch_time=batch_time,
+                    loss=losses))
 
     global best_loss
     # DistributedSampler控制进入分布式环境的数据集以确保模型不是对同一个子数据集训练，以达到训练目标。
@@ -364,10 +365,10 @@ def test(epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Speed {2:.3f} ({3:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                   batch_idx, len(val_loader),
-                   args.world_size * opt.batch_size / batch_time.val,
-                   args.world_size * opt.batch_size / batch_time.avg,
-                   batch_time=batch_time, loss=losses))
+                batch_idx, len(val_loader),
+                args.world_size * opt.batch_size / batch_time.val,
+                args.world_size * opt.batch_size / batch_time.avg,
+                batch_time=batch_time, loss=losses))
 
     if args.local_rank == 0:  # Print them in the Process 0
         # Write the log file each epoch.
@@ -384,7 +385,7 @@ def adjust_learning_rate(optimizer, epoch, step, len_epoch, use_warmup=False):
     if epoch >= 78:
         factor = (epoch - 78) // 5
 
-    lr = opt.learning_rate * args.world_size * (0.2**factor)
+    lr = opt.learning_rate * args.world_size * (0.2 ** factor)
 
     """Warmup"""
     if use_warmup:
@@ -410,6 +411,7 @@ def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqe
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.val = 0
         self.avg = 0
@@ -440,4 +442,3 @@ if __name__ == '__main__':
     for epoch in range(start_epoch, start_epoch + 100):
         train(epoch)
         test(epoch)
-

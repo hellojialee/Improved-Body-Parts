@@ -2,6 +2,7 @@
 You can refer to the supplementary pdf which is in english for explaining.
 """
 import sys
+
 sys.path.append("..")  # 包含上级目录
 import json
 import math
@@ -24,10 +25,8 @@ import warnings
 import os
 import argparse
 
-
-os.environ['CUDA_VISIBLE_DEVICES'] = "3"  # choose the available GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"  # choose the available GPUs
 warnings.filterwarnings("ignore")
-
 
 # visualize
 colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0],
@@ -35,12 +34,11 @@ colors = [[255, 0, 0], [255, 85, 0], [255, 170, 0], [255, 255, 0], [170, 255, 0]
           [170, 0, 255], [255, 0, 255], [255, 0, 170], [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255],
           [128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255]]
 
-
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
-parser.add_argument('--checkpoint_path', '-p',  default='checkpoints_parallel', help='save path')
+parser.add_argument('--checkpoint_path', '-p', default='checkpoints_parallel', help='save path')
 parser.add_argument('--max_grad_norm', default=5, type=float,
-    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
+                    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -53,16 +51,18 @@ args = parser.parse_args()
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
 
-
 limbSeq = config.limbs_conn
 dt_gt_mapping = config.dt_gt_mapping
 flip_heat_ord = config.flip_heat_ord
 flip_paf_ord = config.flip_paf_ord
+
+
 # ###############################################################################################################
 
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.val = 0
         self.avg = 0
@@ -97,7 +97,7 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
 
         imageToTest = cv2.resize(image, (0, 0), fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC)
         imageToTest_padded, pad = util.padRightDownCorner(imageToTest, model_params['max_downsample'],
-                                                           model_params['padValue'])
+                                                          model_params['padValue'])
 
         # ################################# Important!  ###########################################
         # #############################  We use OpenCV to read image (BGR) all the time #######################
@@ -106,7 +106,7 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
 
         # ############################## Rotate the input image #####################3
         if angle != 0:
-            rotate_matrix = cv2.getRotationMatrix2D((input_img.shape[0] / 2, input_img.shape[1]/2), angle, 1)
+            rotate_matrix = cv2.getRotationMatrix2D((input_img.shape[0] / 2, input_img.shape[1] / 2), angle, 1)
             rotate_matrix_reverse = cv2.getRotationMatrix2D((input_img.shape[0] / 2, input_img.shape[1] / 2), -angle, 1)
             input_img = cv2.warpAffine(input_img, rotate_matrix, (0, 0))
 
@@ -157,8 +157,8 @@ def predict(image, params, model, model_params, heat_layers, paf_layers, input_i
         paf = paf[pad[0]:imageToTest_padded.shape[0] - pad[2], pad[1]:imageToTest_padded.shape[1] - pad[3], :]
         paf = cv2.resize(paf, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_CUBIC)
 
-        heatmap_avg = heatmap_avg + heatmap / (len(multiplier)*len(rotate_angle))
-        paf_avg = paf_avg + paf / (len(multiplier)*len(rotate_angle))
+        heatmap_avg = heatmap_avg + heatmap / (len(multiplier) * len(rotate_angle))
+        paf_avg = paf_avg + paf / (len(multiplier) * len(rotate_angle))
 
         # heatmap_avg = np.maximum(heatmap_avg, heatmap)
         # paf_avg = np.maximum(paf_avg, paf)  # 如果换成取最大，效果会变差，有很多误检
@@ -327,7 +327,8 @@ def find_people(connection_all, special_k, all_peaks, params):
                         # 这一个判断非常重要，因为第18和19个limb分别是 2->16, 5->17,这几个点已经在之前的limb中检测到了，
                         # 所以如果两次结果一致，不更改此时的part分配，否则又分配了一次，编号是覆盖了，但是继续运行下面代码，part数目
                         # 会加１，结果造成一个人的part之和>18。不过如果两侧预测limb端点结果不同，还是会出现number of part>18，造成多检
-                        # FIXME: 没有利用好冗余的connection信息，最后两个limb的端点与之前循环过程中重复了，但没有利用聚合，只是直接覆盖，其实直接覆盖是为了弥补漏检
+                        # FIXME: 没有利用好冗余的connection信息，最后两个limb的端点与之前循环过程中重复了，但没有利用聚合，
+                        #  只是直接覆盖，其实直接覆盖是为了弥补漏检
 
                         subset[j][indexB][0] = partBs[i]  # partBs[i]是limb其中一个端点的id号码
                         subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
@@ -364,7 +365,8 @@ def find_people(connection_all, special_k, all_peaks, params):
                     # overlap the reassigned keypoint with higher score
                     #  如果是添加冗余连接的重复的点，用新的更加高的冗余连接概率取代原来连接的相同的关节点的概率
                     # -- 对上面问题的回答： 使用前500进行测试，发现加上这个能提高0.1%，没有什么区别
-                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= connection_all[k][i][2]:
+                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= \
+                            connection_all[k][i][2]:
                         # 否则用当前的limb端点覆盖已经存在的点，并且在这之前，减去已存在关节点的置信度和连接它的limb置信度
 
                         # 减去之前的节点置信度和limb置信度
@@ -451,7 +453,6 @@ def find_people(connection_all, special_k, all_peaks, params):
 
                         # 删除和当前limb有连接,并且置信度低的那个人的节点   # FIXME:  获取不删除？为了检测更多？
                         if params['remove_recon'] > 0:
-
                             subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + \
                                                       subset[small_j][remove_c][1]
                             subset[small_j][remove_c][0] = -1
@@ -489,7 +490,8 @@ def find_people(connection_all, special_k, all_peaks, params):
     # delete some rows of subset which has few parts occur
     deleteIdx = []
     for i in range(len(subset)):
-        if subset[i][-1][0] < 2 or subset[i][-2][0] / subset[i][-1][0] < 0.45:   # subset[i][-1][0] < 4 or  FIXME: 一些预知需要调整，并且coco更侧重检测到而不是虚警
+        if subset[i][-1][0] < 2 or subset[i][-2][0] / subset[i][-1][
+            0] < 0.45:  # subset[i][-1][0] < 4 or  FIXME: 一些预知需要调整，并且coco更侧重检测到而不是虚警
             deleteIdx.append(i)
     subset = np.delete(subset, deleteIdx, axis=0)
 
@@ -553,7 +555,7 @@ def predict_many(coco, images_directory, validation_ids, params, model, model_pa
     for image_id in tqdm.tqdm(validation_ids):
         image_name = get_image_name(coco, image_id)
         image_name = os.path.join(images_directory, image_name)
-        keypoints[image_id] = process(image_name, dict(params), model, dict(model_params), heat_layers+2, paf_layers)
+        keypoints[image_id] = process(image_name, dict(params), model, dict(model_params), heat_layers + 2, paf_layers)
         # fixme: heat_layers + 1 if you use background keypoint  !!!
     return keypoints
 
@@ -587,17 +589,17 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     dataDir = 'data/dataset/coco/link2coco2017'
 
     # # # #############################################################################
-    # 在验证集上测试代码
+    # For evaluation on validation set
     annFile = '%s/annotations/%s_%s.json' % (dataDir, prefix, dataset)
     print(annFile)
     cocoGt = COCO(annFile)
 
-    if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds()  # [:1000] 在这里可以设置validate图片的大小
+    if validation_ids == None:  # todo: we can set the validataion image ids here  !!!!!!
+        validation_ids = cocoGt.getImgIds()[:500]  # [:1000] we can change the range of COCO validation images here
     # # #############################################################################
 
     # #############################################################################
-    # 在test数据集上测试代码
+    # For evaluation on test-dev set
     # annFile = 'data/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test-dev2017.json' # image_info_test2017.json
     # cocoGt = COCO(annFile)
     # validation_ids = cocoGt.getImgIds()
@@ -636,7 +638,7 @@ if __name__ == "__main__":
     posenet = amp.initialize(posenet, opt_level=args.opt_level,
                              keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                              loss_scale=args.loss_scale)
-    posenet.eval()   # set eval mode is important
+    posenet.eval()  # set eval mode is important
 
     params, model_params = config_reader()
 
@@ -644,7 +646,8 @@ if __name__ == "__main__":
     show_eval_speed = False
 
     with torch.no_grad():
-        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_52_512_input_1scale_max', dataset='val2017')  # 'val2017'
+        eval_result_original = validation(posenet, dump_name='residual_4_hourglass_focal_epoch_52_512_input_1scale_max',
+                                          dataset='val2017')  # 'val2017'
 
     print('over!')
 
@@ -652,4 +655,3 @@ if __name__ == "__main__":
     # annFile='/home/jia/Desktop/keras_Realtime_Multi-Person_Pose_Estimation-new-generation/dataset/coco/link2coco2017/annotations_trainval_info/image_info_test2017.json'
     # cocoGt = COCO(annFile)
     # validation_ids = cocoGt.getImgIds() 将获得带有image id的一个list
-

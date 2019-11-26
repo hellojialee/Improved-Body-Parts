@@ -11,10 +11,10 @@ modelID = 1
 # Look in matlab counterpart for explanation thre 1,2,3 are threshold # counterpart: 副本；配对物
 starting_range = 0.8
 ending_range = 2
-scale_search =    0.5, 1, 1.5, 2, 3  #  0.8, 1.2, 1.8, 2.5, 3.2 #
+scale_search =    0.5, 1, 1.5, 2, 3  #  1
 rotation_search = 0
-thre1 = 0.12  # keypoint threshold
-thre2 = 0.12 # limb threshold
+thre1 = 0.1  # keypoint threshold
+thre2 = 0.1 # limb threshold
 
 connect_ration = 0.8 # limb上连接点的响应一致性的要求
 min_num = 4

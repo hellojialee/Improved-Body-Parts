@@ -21,22 +21,20 @@ import warnings
 import os
 import argparse
 
-
 os.environ['CUDA_VISIBLE_DEVICES'] = "0"  # choose the available GPUs
 warnings.filterwarnings("ignore")
 
 # For visualize
-colors = [[	128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [255, 0, 0], [255, 85, 0], [255, 170, 0],
+colors = [[128, 114, 250], [130, 238, 238], [48, 167, 238], [180, 105, 255], [255, 0, 0], [255, 85, 0], [255, 170, 0],
           [255, 255, 0], [170, 255, 0], [85, 255, 0], [0, 255, 0], [0, 255, 85], [0, 255, 170], [0, 255, 255],
           [0, 170, 255], [0, 85, 255], [0, 0, 255], [85, 0, 255], [170, 0, 255], [255, 0, 255], [255, 0, 170],
           [255, 0, 85], [193, 193, 255], [106, 106, 255], [20, 147, 255]]
-
 
 torch.cuda.empty_cache()
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--max_grad_norm', default=5, type=float,
-    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
+                    help="If the norm of the gradient vector exceeds this, re-normalize it to have the norm equal to max_grad_norm")
 parser.add_argument('--image', type=str, default='try_image/ski.jpg', help='input image')  # required=True
 parser.add_argument('--output', type=str, default='result.jpg', help='output image')
 parser.add_argument('--opt-level', type=str, default='O1')
@@ -49,12 +47,13 @@ args = parser.parse_args()
 opt = TrainingOpt()
 config = GetConfig(opt.config_name)
 
-
 limbSeq = config.limbs_conn
 dt_gt_mapping = config.dt_gt_mapping
 flip_heat_ord = config.flip_heat_ord
 flip_paf_ord = config.flip_paf_ord
 draw_list = config.draw_list
+
+
 # ###############################################################################################################
 
 
@@ -103,9 +102,11 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # oriImg = cv2.resize(oriImg, (768, 768))
     # oriImg = cv2.flip(oriImg, 1) 因为训练时作了flip，所以用这种方式提升并没有作用
     multiplier = [x * model_params['boxsize'] / oriImg.shape[0] for x in params['scale_search']]  # 按照图片高度进行缩放
-    # multipier = [0.21749408983451538, 0.43498817966903075, 0.6524822695035462, 0.8699763593380615],首先把输入图像高度变成368,然后再做缩放
+    # multipier = [0.21749408983451538, 0.43498817966903075, 0.6524822695035462, 0.8699763593380615],
+    # 首先把输入图像高度变成368,然后再做缩放
 
-    heatmap_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], heat_layers))  # fixme if you change the number of keypoints
+    heatmap_avg = np.zeros(
+        (oriImg.shape[0], oriImg.shape[1], heat_layers))  # fixme if you change the number of keypoints
     paf_avg = np.zeros((oriImg.shape[0], oriImg.shape[1], paf_layers))
 
     for m in range(len(multiplier)):
@@ -129,7 +130,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
         swap_image = input_img[:, ::-1, :].copy()
         # plt.imshow(swap_image[:, :, [2, 1, 0]])  # Opencv image format: BGR
         # plt.show()
-        input_img = np.concatenate((input_img[None, ...], swap_image[None, ...]), axis=0)  # (2, height, width, channels)
+        input_img = np.concatenate((input_img[None, ...], swap_image[None, ...]),
+                                   axis=0)  # (2, height, width, channels)
         input_img = torch.from_numpy(input_img).cuda()
         # ###################################################################################
 
@@ -175,7 +177,6 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
         # heatmap_avg = np.maximum(heatmap_avg, heatmap)
         # paf_avg = np.maximum(paf_avg, paf)  # 如果换成取最大，效果会变差，有很多误检
-
 
     all_peaks = []
     peak_counter = 0
@@ -270,23 +271,26 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                                         np.linspace(candA[i][1], candB[j][1], num=mid_num)))
 
                     limb_response = np.array([score_mid[int(round(startend[I][1])), int(round(startend[I][0]))] \
-                                      for I in range(len(startend))])
+                                              for I in range(len(startend))])
 
                     score_midpts = limb_response
 
-                    score_with_dist_prior = sum(score_midpts) / len(score_midpts) + min(0.5 * oriImg.shape[0] / norm - 1, 0)
+                    score_with_dist_prior = sum(score_midpts) / len(score_midpts) + min(
+                        0.5 * oriImg.shape[0] / norm - 1, 0)
                     # 这一项是为了惩罚过长的connection, 只有当长度大于图像高度的一半时才会惩罚 todo
                     # The term of sum(score_midpts)/len(score_midpts), see the link below.
                     # https://github.com/michalfaber/keras_Realtime_Multi-Person_Pose_Estimation/issues/48
 
-                    criterion1 = len(np.nonzero(score_midpts > params['thre2'])[0]) > params['connect_ration'] * len(score_midpts)  # fixme: tune 手动调整, 本来是 > 0.8*len
+                    criterion1 = len(np.nonzero(score_midpts > params['thre2'])[0]) > params['connect_ration'] * len(
+                        score_midpts)  # fixme: tune 手动调整, 本来是 > 0.8*len
                     # 我认为这个判别标准是保证paf朝向的一致性  param['thre2']
                     # parm['thre2'] = 0.05
                     criterion2 = score_with_dist_prior > 0
 
                     if criterion1 and criterion2:
                         connection_candidate.append([i, j, score_with_dist_prior, norm,
-                                                     0.5 * score_with_dist_prior + 0.25 * candA[i][2] + 0.25 * candB[j][2]])
+                                                     0.5 * score_with_dist_prior + 0.25 * candA[i][2] + 0.25 * candB[j][
+                                                         2]])
                         # todo:直接把两种类型概率相加不合理
                         # connection_candidate排序的依据是dist prior概率和两个端点heat map预测的概率值
                         # How to undersatand the criterion?
@@ -345,7 +349,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
 
                     # 1:size(subset,1), 若subset.shape=(5,20), 则len(subset)=5，表示有5个人
                     # subset每一行对应的是一个人的18个关键点和number以及score的结果
-                    if subset[j][indexA][0].astype(int) == (partAs[i]).astype(int) or subset[j][indexB][0].astype(int) == partBs[i].astype(int):
+                    if subset[j][indexA][0].astype(int) == (partAs[i]).astype(int) or subset[j][indexB][0].astype(
+                            int) == partBs[i].astype(int):
                         # 看看这次考察的limb两个端点之一是否有一个已经在上一轮中出现过了,即是否已经分配给某人了
                         # 每一个最外层循环都只考虑一个limb，因此处理的时候就只会有两种part,即表示为partAs,partBs
                         subset_idx[found] = j  # 标记一下，这个端点应该是第j个人的
@@ -355,13 +360,14 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                     j = subset_idx[0]
 
                     if subset[j][indexB][0].astype(int) == -1 and \
-                                            params['len_rate'] * subset[j][-1][1] > connection_all[k][i][-1]:
+                            params['len_rate'] * subset[j][-1][1] > connection_all[k][i][-1]:
                         # 如果新加入的limb比之前已经组装的limb长很多，也舍弃
                         # 如果这个人的当前点还没有被找到时，把这个点分配给这个人
                         # 这一个判断非常重要，因为第18和19个limb分别是 2->16, 5->17,这几个点已经在之前的limb中检测到了，
                         # 所以如果两次结果一致，不更改此时的part分配，否则又分配了一次，编号是覆盖了，但是继续运行下面代码，part数目
                         # 会加１，结果造成一个人的part之和>18。不过如果两侧预测limb端点结果不同，还是会出现number of part>18，造成多检
-                        # FIXME: 没有利用好冗余的connection信息，最后两个limb的端点与之前循环过程中重复了，但没有利用聚合，只是直接覆盖，其实直接覆盖是为了弥补漏检
+                        # FIXME: 没有利用好冗余的connection信息，最后两个limb的端点与之前循环过程中重复了，但没有利用聚合，
+                        #  只是直接覆盖，其实直接覆盖是为了弥补漏检
 
                         subset[j][indexB][0] = partBs[i]  # partBs[i]是limb其中一个端点的id号码
                         subset[j][indexB][1] = connection_all[k][i][2]  # 保存这个点被留下来的置信度
@@ -398,7 +404,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                     #  overlap the reassigned keypoint
                     #  如果是添加冗余连接的重复的点，用新的更加高的冗余连接概率取代原来连接的相同的关节点的概率
                     # 这一个改动没啥影响
-                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= connection_all[k][i][2]:
+                    elif subset[j][indexB][0].astype(int) == partBs[i].astype(int) and subset[j][indexB][1] <= \
+                            connection_all[k][i][2]:
                         # 否则用当前的limb端点覆盖已经存在的点，并且在这之前，减去已存在关节点的置信度和连接它的limb置信度
                         if params['len_rate'] * subset[j][-1][1] <= connection_all[k][i][-1]:
                             continue
@@ -436,7 +443,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                         min_limb2 = np.min(subset[j2, :-2, 1][membership2 == 1])
                         min_tolerance = min(min_limb1, min_limb2)  # 计算允许进行拼接的置信度
 
-                        if connection_all[k][i][2] < params['connection_tole'] * min_tolerance or params['len_rate'] * subset[j1][-1][1] <= connection_all[k][i][-1]:
+                        if connection_all[k][i][2] < params['connection_tole'] * min_tolerance or params['len_rate'] * \
+                                subset[j1][-1][1] <= connection_all[k][i][-1]:
                             # 如果merge这两个身体部分的置信度不够大，或者当前这个limb明显大于已存在的limb的长度，则不进行连接
                             # todo: finetune the tolerance of connection
                             continue  #
@@ -481,7 +489,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
                             remove_c = c2
                         # 删除和当前limb有连接,并且置信度低的那个人的节点
                         if params['remove_recon'] > 0:
-                            subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + subset[small_j][remove_c][1]
+                            subset[small_j][-2][0] -= candidate[subset[small_j][remove_c][0].astype(int), 2] + \
+                                                      subset[small_j][remove_c][1]
                             subset[small_j][remove_c][0] = -1
                             subset[small_j][remove_c][1] = -1
                             subset[small_j][-1][0] -= 1
@@ -517,7 +526,8 @@ def process(input_image, params, model_params, heat_layers, paf_layers):
     # delete some rows of subset which has few parts occur
     deleteIdx = []
     for i in range(len(subset)):
-        if subset[i][-1][0] < 4 or subset[i][-2][0] / subset[i][-1][0] < 0.45:  # (params['thre1'] + params['thre2']) / 2:  # todo: tune, it matters much!
+        if subset[i][-1][0] < 4 or subset[i][-2][0] / subset[i][-1][
+            0] < 0.45:  # (params['thre1'] + params['thre2']) / 2:  # todo: tune, it matters much!
             deleteIdx.append(i)
     subset = np.delete(subset, deleteIdx, axis=0)
 
@@ -615,7 +625,7 @@ if __name__ == '__main__':
                              opt_level=args.opt_level,
                              keep_batchnorm_fp32=args.keep_batchnorm_fp32,
                              loss_scale=args.loss_scale)
-    posenet.eval()   # set eval mode is important
+    posenet.eval()  # set eval mode is important
 
     tic = time.time()
     print('start processing...')
@@ -624,7 +634,8 @@ if __name__ == '__main__':
     tic = time.time()
     # generate image with body parts
     with torch.no_grad():
-        canvas = process(input_image, params, model_params, config.heat_layers + 2, config.paf_layers)  # todo background + 2
+        canvas = process(input_image, params, model_params, config.heat_layers + 2,
+                         config.paf_layers)  # todo background + 2
 
     toc = time.time()
     print('processing time is %.5f' % (toc - tic))

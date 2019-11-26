@@ -31,14 +31,13 @@ try:
 except ImportError:
     raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
 
-
 warnings.filterwarnings("ignore")
 
 parser = argparse.ArgumentParser(description='PoseNet Training')
 parser.add_argument('--resume', '-r', action='store_true', default=True, help='resume from checkpoint')
 parser.add_argument('--swa', action='store_true', default=True, help='swa usage flag (default: off)')
 parser.add_argument('--swa_freq', type=int, default=5, metavar='N', help='frequency of averaging weight (default: 5)')
-parser.add_argument('--checkpoint_path', '-p',  default='link2checkpoints_distributed', help='save path')
+parser.add_argument('--checkpoint_path', '-p', default='link2checkpoints_distributed', help='save path')
 parser.add_argument('--max_grad_norm', default=10, type=float,
                     help=("If the norm of the gradient vector exceeds this, "
                           "re-normalize it to have the norm equal to max_grad_norm"))
@@ -46,11 +45,10 @@ parser.add_argument('--max_grad_norm', default=10, type=float,
 parser.add_argument("--local_rank", default=0, type=int)
 parser.add_argument('--opt-level', type=str, default='O1')
 # 因为我们使用了 SWA 训练时不让BN层更新，因此也不需要同步 BN 了
-parser.add_argument('--sync_bn',  action='store_true', default=True, help='enabling apex sync BN.')  # Freeze BN
+parser.add_argument('--sync_bn', action='store_true', default=True, help='enabling apex sync BN.')  # Freeze BN
 parser.add_argument('--keep-batchnorm-fp32', type=str, default=None)
 parser.add_argument('--loss-scale', type=str, default=None)  # '1.0'
 parser.add_argument('--print-freq', '-f', default=10, type=int, metavar='N', help='print frequency (default: 10)')
-
 
 # ###################################  Setup for some configurations ###########################################
 torch.backends.cudnn.benchmark = True  # 如果我们每次训练的输入数据的size不变，那么开启这个就会加快我们的训练速度
@@ -66,7 +64,6 @@ train_data = MyDataset(config, soureconfig, shuffle=False, augment=True)  # shuf
 
 soureconfig_val = COCOSourceConfig(opt.hdf5_val_data)
 val_data = MyDataset(config, soureconfig_val, shuffle=False, augment=True)  # shuffle in data loader
-
 
 best_loss = float('inf')
 start_epoch = 0  # 从0开始或者从上一个epoch开始
@@ -97,9 +94,9 @@ if args.sync_bn:  # 用累计loss来达到sync bn 是不是更好，更改bn的m
     #  because DDP needs to see the finalized model parameters
     # We rely on torch distributed for synchronization between processes. Only DDP support the apex sync_bn now.
     import apex
+
     print("Using apex synced BN.")
     model = apex.parallel.convert_syncbn_model(model)
-
 
 # It should be called before constructing optimizer if the module will live on GPU while being optimized.
 model.cuda()
@@ -115,7 +112,6 @@ if args.swa:
     # SWA: initialize SWA optimizer wrapper
     print("===========================>  Using SWA training !")
     optimizer = SWA(optimizer)
-
 
 # 设置学习率下降策略, extract the "bare"  Pytorch optimizer before Apex wrapping.
 # scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.4, last_epoch=-1)
@@ -147,15 +143,16 @@ if args.resume:
     def resume():
         if os.path.isfile(opt.ckpt_path):
             print('Resuming from checkpoint ...... ')
-            checkpoint = torch.load(opt.ckpt_path, map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
+            checkpoint = torch.load(opt.ckpt_path,
+                                    map_location=torch.device('cpu'))  # map to cpu to save the gpu memory
 
             # #################################################
             from collections import OrderedDict
             new_state_dict = OrderedDict()
             for k, v in checkpoint['weights'].items():
                 # Exclude the regression layer by commenting the following code
-                #if 'out' or 'merge' in k:
-                    #continue
+                # if 'out' or 'merge' in k:
+                # continue
                 name = 'module.' + k  # add prefix 'module.'
                 new_state_dict[name] = v
             model.load_state_dict(new_state_dict)  # , strict=False
@@ -182,8 +179,9 @@ if args.resume:
             del checkpoint
         else:
             print("========> No checkpoint found at '{}'".format(opt.ckpt_path))
-    resume()
 
+
+    resume()
 
 train_sampler = None
 val_sampler = None
@@ -284,11 +282,11 @@ def train(epoch):
                       'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                       'Speed {3:.3f} ({4:.3f})\t'
                       'Loss {loss.val:.10f} ({loss.avg:.4f}) <================ \t'.format(
-                        epoch, batch_idx, len(train_loader),
-                        args.world_size * opt.batch_size / batch_time.val,
-                        args.world_size * opt.batch_size / batch_time.avg,
-                        batch_time=batch_time,
-                        loss=losses))
+                    epoch, batch_idx, len(train_loader),
+                    args.world_size * opt.batch_size / batch_time.val,
+                    args.world_size * opt.batch_size / batch_time.avg,
+                    batch_time=batch_time,
+                    loss=losses))
 
     global best_loss
     # DistributedSampler控制进入分布式环境的数据集以确保模型不是对同一个子数据集训练，以达到训练目标。
@@ -350,10 +348,10 @@ def test(epoch):
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Speed {2:.3f} ({3:.3f})\t'
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
-                   batch_idx, len(val_loader),
-                   args.world_size * opt.batch_size / batch_time.val,
-                   args.world_size * opt.batch_size / batch_time.avg,
-                   batch_time=batch_time, loss=losses))
+                batch_idx, len(val_loader),
+                args.world_size * opt.batch_size / batch_time.val,
+                args.world_size * opt.batch_size / batch_time.avg,
+                batch_time=batch_time, loss=losses))
 
     if args.local_rank == 0:  # Print them in the Process 0
         # Write the log file each epoch.
@@ -375,6 +373,7 @@ def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqe
 
 class AverageMeter(object):
     """Computes and stores the average and current value"""
+
     def __init__(self):
         self.val = 0
         self.avg = 0
@@ -434,4 +433,3 @@ if __name__ == '__main__':
                 'epoch': epoch
             }
             torch.save(state, './' + checkpoint_path + '/PoseNet_' + str(epoch) + '_epoch.pth')
-

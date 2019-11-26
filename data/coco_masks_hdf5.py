@@ -14,7 +14,7 @@ import json
 import time
 import matplotlib.pyplot as plt
 
-dataset_dir = os.path.abspath(os.path.join(os.path.dirname( __file__ ), '..', 'data/dataset/coco/link2coco2017'))
+dataset_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'data/dataset/coco/link2coco2017'))
 
 tr_anno_path = os.path.join(dataset_dir, "annotations/person_keypoints_train2017.json")  # 只取keypoint的标注信息
 tr_img_dir = os.path.join(dataset_dir, "train2017")
@@ -28,11 +28,10 @@ datasets = [
     (tr_anno_path, tr_img_dir, "COCO")
 ]
 
-
 tr_hdf5_path = os.path.join(dataset_dir, "coco_train_dataset384.h5")
 val_hdf5_path = os.path.join(dataset_dir, "coco_val_dataset384.h5")
 
-val_size = 5000  # size of validation set  设置的validation subset的大小.　剩余的val数据将选入train数据中
+val_size = 100  # 5000  # size of validation set  设置的validation subset的大小.　剩余的val数据将选入train数据中
 image_size = 384  # 用于训练网络时，设定的训练集图片的统一尺寸　
 
 
@@ -65,9 +64,9 @@ def make_mask(img_dir, img_id, img_anns, coco):
 
     flag = 0
     for p in img_anns:
-        seg = p["segmentation"]   # seg is just a boarder of an object, see annotation file
+        seg = p["segmentation"]  # seg is just a boarder of an object, see annotation file
 
-        if p["iscrowd"] == 1:   # the handel of crowd
+        if p["iscrowd"] == 1:  # the handel of crowd
             # segmentation格式取决于这个实例是一个单个的对象（即iscrowd=0，将使用polygons格式）还是一组对象（即iscrowd=1，将使用RLE格式）
             mask_crowd = coco.annToMask(p)
 
@@ -114,7 +113,7 @@ def make_mask(img_dir, img_id, img_anns, coco):
     # print('show')
     # # # -------------------------------------------------------------------
 
-    return img,  mask_concat
+    return img, mask_concat
 
 
 def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
@@ -146,9 +145,12 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
             pers["joint"][part, 1] = anno[part * 3 + 1]  # y坐标，注意x，y坐标的先后顺序
 
             # visible/invisible
-            # COCO - Each keypoint has a 0-indexed location x,y and a visibility flag v defined as v=0: not labeled (in which case x=y=0), v=1: labeled but not visible, and v=2: labeled and visible.
-            # OURS - # 3 never marked up in this dataset, 2 - not marked up in this person, 1 - marked and visible, 0 - marked but invisible
-            if anno[part * 3 + 2] == 2:   # +2　对应visibility的值
+            # COCO - Each keypoint has a 0-indexed location x,y and a visibility flag v defined as v=0: not labeled
+            # (in which case x=y=0), v=1: labeled but not visible, and v=2: labeled and visible.
+
+            # OURS - # 3 never marked up in this dataset, 2 - not marked up in this person, 1 - marked and visible,
+            # 0 - marked but invisible
+            if anno[part * 3 + 2] == 2:  # +2　对应visibility的值
                 pers["joint"][part, 2] = 1
             elif anno[part * 3 + 2] == 1:
                 pers["joint"][part, 2] = 0
@@ -188,7 +190,7 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
         for pc in prev_center:  # prev_center 保存了person　center 以及人体框长和宽中的最大值
             a = np.expand_dims(pc[:2], axis=0)  # prev_center是一个坐标: (x, y)
             b = np.expand_dims(person_center, axis=0)
-            dist = cdist(a, b)[0]   # by default, computing the euclidean distance
+            dist = cdist(a, b)[0]  # by default, computing the euclidean distance
             # pc[2] 代表人体框长和宽中最大的那一边,原始程序中把距离main person特别近，<0.3的person不再作为下一个main person
             # 因为这样没有必要，离得很近，图片裁出来的部分基本一样
             if dist < pc[2] * 0.3:
@@ -203,7 +205,6 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
         # main_persions是一个list, pers是一个dic字典，排序在第一的main person将享有优先权
         prev_center.append(np.append(person_center, max(img_anns[p]["bbox"][2], img_anns[p]["bbox"][3])))
         # 保存了person　center 以及人体框长和宽中的最大值
-
 
     template = dict()
     template["dataset"] = dataset_type  # coco or coco_val
@@ -220,14 +221,15 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
     template["annolist_index"] = image_index
     template["img_path"] = '%012d.jpg' % img_id
 
-    # 外部大循环是每一张图片，内部（也就是下面这个）循环是一个图片中的所有main_persons, 也就是说每一个main_person都会轮流变成排序第一的人，将享有图片居中的特权
+    # 外部大循环是每一张图片，内部（也就是下面这个）循环是一个图片中的所有main_persons, 也就是说每一个main_person都会轮流变成排序第一的人，
+    # 将享有图片居中的特权
     for p, person in enumerate(main_persons):  # p是list的索引序号，person是dic类型的信息内容
 
         instance = template.copy()  # template is a dictionary type
 
         instance["objpos"] = [main_persons[p]["objpos"]]
         instance["joints"] = [main_persons[p]["joint"].tolist()]  # Return the array as a (possibly nested) list
-        instance["scale_provided"] = [ main_persons[p]["scale_provided"] ]
+        instance["scale_provided"] = [main_persons[p]["scale_provided"]]
         #  while training they scale main person to be approximately image size(368 pix in our case). But after
         #  it they do random scaling 0.6-1.1. So this is very logical network never learned libs(and PAFs) could be
         #  larger than half of image.
@@ -251,7 +253,7 @@ def process_image(image_rec, img_id, image_index, img_anns, dataset_type):
 
         assert "people_index" in instance, "No main person index"
         instance["numOtherPeople"] = lenOthers
-        yield instance   # 带有yield关键字，是generator
+        yield instance  # 带有yield关键字，是generator
         #  除了crowd和关键点很少的人以外，既打包了main person，也保存了其他非main person，对于一个instance，每次只有一个优先权main person
 
 
@@ -291,7 +293,8 @@ def writeImage(grp, img_grp, data, img, mask_miss, count, image_id, mask_grp=Non
             img_ds2 = mask_grp.create_dataset(img_key, data=mask_miss, chunks=None)
 
     key = '%07d' % count
-    required = {'image':img_key, 'joints': serializable_meta['joints'], 'objpos': serializable_meta['objpos'], 'scale_provided': serializable_meta['scale_provided'] }
+    required = {'image': img_key, 'joints': serializable_meta['joints'], 'objpos': serializable_meta['objpos'],
+                'scale_provided': serializable_meta['scale_provided']}
     ds = grp.create_dataset(key, data=json.dumps(required), chunks=None)
     ds.attrs['meta'] = json.dumps(serializable_meta)
 
@@ -299,7 +302,6 @@ def writeImage(grp, img_grp, data, img, mask_miss, count, image_id, mask_grp=Non
 
 
 def process():
-
     tr_h5 = h5py.File(tr_hdf5_path, 'w')
     tr_grp = tr_h5.create_group("dataset")
     tr_write_count = 0
@@ -354,7 +356,7 @@ if __name__ == '__main__':
     tr_sample, val_sample = process()
     end_time = time.time()
     print('************************** \n')
-    print('coco mask data process finished! consuming time: %.3f min' % ((end_time - start_time)/60))
+    print('coco mask data process finished! consuming time: %.3f min' % ((end_time - start_time) / 60))
     print('the size of train sample is: ', tr_sample)
     print('the size of val sample is: ', val_sample)
     # 大约需要处理30 min
