@@ -593,7 +593,7 @@ def validation(model, dump_name, validation_ids=None, dataset='val2017'):
     cocoGt = COCO(annFile)
 
     if validation_ids == None:   # todo: we can set the validataion image ids here  !!!!!!
-        validation_ids = cocoGt.getImgIds()[:250]  # [:100] 在这里可以设置validate图片的大小
+        validation_ids = cocoGt.getImgIds()  # [:1000] 在这里可以设置validate图片的大小
     # # #############################################################################
 
     # #############################################################################
