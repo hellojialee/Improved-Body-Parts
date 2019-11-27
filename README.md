@@ -43,6 +43,13 @@ A bottom-up approach for the problem of multi-person pose estimation.
 
 `python demo_image.py`
 
+## Inference Speed
+
+The speed of our system is tested on the MS-COCO test-dev dataset. 
+
+- Inference speed of our 4-stage IMHN with 512 × 512 input on one 2080TI GPU: 38.5 FPS (100% GPU-Util). 
+- Processing speed of the keypoint assignment algorithm part that is implemented in pure Python and a single process on Intel Xeon E5-2620 CPU: 5.2 FPS (has not been well accelerated). 
+
 ## Evaluation Steps
 
 The corresponding code is in pure python without multiprocess for now.
