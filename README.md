@@ -85,13 +85,11 @@ python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 Please kindly cite this paper in your publications if it helps your research.
 
 ```
-@misc{li2019simple,
-    title={Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation},
-    author={Jia Li and Wen Su and Zengfu Wang},
-    year={2019},
-    eprint={1911.10529},
-    archivePrefix={arXiv},
-    primaryClass={cs.CV}
+@inproceedings{li2019simple,
+	title={Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation},
+	author={Jia Li and Wen Su and Zengfu Wang},
+	booktitle = {arXiv preprint  arXiv:1911.10529},
+	year={2019}
 }
 ```
 
