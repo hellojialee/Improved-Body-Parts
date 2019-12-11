@@ -1,5 +1,5 @@
 """
-You can refer to the supplementary pdf which is in english for explaining.
+Hint: please ingore the chinease annotations whcih may be wrong and they are just remains from old version.
 """
 import sys
 
