@@ -37,6 +37,8 @@ A bottom-up approach for the problem of multi-person pose estimation.
 
    Download Link: [BaiduCloud](https://pan.baidu.com/s/1X7nGC-7CliP1iKgIfsBMUg)
 
+   Alternatively, download the pre-trained model without optimizer checkpoint only for the default configuration via: [GoogleDrive](https://drive.google.com/open?id=1gLa2oNxnbFPo0BjnpPaiAmWJwyND8wkA)
+
 4. Change the paths in the code according to your environment.
 
 ## Run a Demo
@@ -92,4 +94,3 @@ Please kindly cite this paper in your publications if it helps your research.
 	year={2019}
 }
 ```
-
