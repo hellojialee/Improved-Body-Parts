@@ -4,6 +4,8 @@ Code and pre-trained models for our paper, [“Simple Pose: Rethinking and Impro
 
 Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation using Body Parts" (under review). The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
+
+
 ## Introduction
 
 A bottom-up approach for the problem of multi-person pose estimation.
@@ -20,9 +22,10 @@ A bottom-up approach for the problem of multi-person pose estimation.
 
 ## Project Features
 
-- Implement the models using Pytorch in auto mixed-precision.
+- Implement the models using Pytorch in auto mixed-precision (using Nvidia Apex).
 - Supprot training on multiple GPUs (over 90% GPU usage rate on each GPU card).
-- Fast data preparing and augmentation during training.
+- Fast data preparing and augmentation during training (generating about **40 samples per second** on signle CPU process and much more if warpped by DataLoader Class).
+- Multi-scale supervision.
 - **This project can also serve as a detailed practice to the green hand in Pytorch.**
 
 ## Prepare
@@ -73,6 +76,10 @@ Multiple GUPs are recommended to use to speed up the training process, but we su
 ```shell
 python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 ```
+
+> Note:  The *loss_model_parrel.py* is for *train.py* and *train_parallel.py*, while the *loss_model.py* is for *train_distributed.py* and *train_distributed_SWA.py.* They are different in dividing the batch size. Please refer to the code about the different choices. 
+>
+> For distributed training, the real batch_size = batch_size_in_config* × GPU_Num (world_size actually). For others, the real batch_size = batch_size_in_config*. The differences come form the different mechanisms of data parallel training and distrubited training. 
 
 ## Referred Repositories (mainly)
 
