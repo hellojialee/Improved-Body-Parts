@@ -48,7 +48,7 @@ A bottom-up approach for the problem of multi-person pose estimation.
 
 `python demo_image.py`
 
-![examples](visulizatoin/2987.examples.png)
+![examples](visulizatoin/examples.png)
 
 ## Inference Speed
 
