@@ -6,7 +6,7 @@ import numpy as np
 
 
 class TrainingOpt:
-    batch_size = 8  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
+    batch_size = 4  # for single process 整个分布式模型总的 batch size 是 batch_size*world_size
     learning_rate = 2.5e-5  # 2.5e-5  # 1e-4  # 2.5e-4  for single process 整个分布式模型总的是learning_rate*world_size
     config_name = "Canonical"
     hdf5_train_data = "./data/dataset/coco/link2coco2017/coco_train_dataset512.h5"  # 不使用验证集上的数据
@@ -33,13 +33,13 @@ class TransformationParams:
         self.scale_prob = 0.8  # 0.8  # scale probability, 0: never scale, 1: always scale
         self.scale_min = 0.7  # 0.75  # 之前训练设置的是0.8，但发现对小目标很不明显
         self.scale_max = 1.3  # 1.25
-        self.max_rotate_degree = 50.  # 40 todo: 看看hourglass中512设置的偏移
+        self.max_rotate_degree = 40.  # 40 todo: 看看hourglass中512设置的偏移
         self.center_perterb_max = 50.  # shift augmentation
         self.flip_prob = 0.5  # flip the image to force the network distinguish the mirror symmetrical keypoints
         self.tint_prob = 0.2  # ting着色操作比较耗时，如果按照0.5的概率进行，可能会使得每秒数据扩充图片减少10张
         self.sigma = 9  # 7 当是512输入时是9
-        self.keypoint_gaussian_thre = 0.005  # 低于此值的keypoint gt高斯响应的区域被置零
-        self.limb_gaussian_thre = 0.04  # 0.03  # 0.1  # 低于此值的body part gt高斯响应的区域被置零
+        self.keypoint_gaussian_thre = 0.015  # 低于此值的keypoint gt高斯响应的区域被置零
+        self.limb_gaussian_thre = 0.015  # 0.03  # 0.1  # 低于此值的body part gt高斯响应的区域被置零
         self.paf_sigma = 7  # 5 todo: sigma of PAF 对于PAF的分布，设其标准差为多少最合适呢
         # the value of sigma is important, there should be an equal contribution between foreground
         # and background heatmap pixels. Otherwise, there is a prior towards the background that forces the
