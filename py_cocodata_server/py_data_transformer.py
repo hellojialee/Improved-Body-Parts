@@ -44,6 +44,7 @@ class AugmentSelection:
         # the main idea: we will do all image transformations with one affine matrix.
         # this saves lot of cpu and make code significantly shorter
         # same affine matrix could be used to transform joint coordinates afterwards
+        scale_self *= (config.height / (config.height - 1))
 
         A = cos(self.degree / 180. * pi)
         B = sin(self.degree / 180. * pi)
@@ -55,9 +56,9 @@ class AugmentSelection:
         # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/blob/master/py_rmpe_server/py_rmpe_transformer.py
         # This mean we will scale picture so height of person always will be 0.6 of picture.
         # After it we apply random scaling (self.scale) from 0.6 to 1.1
-        (width, height) = center
-        center_x = width + self.crop[0]
-        center_y = height + self.crop[1]
+         (width, height) = center
+        center_x = width
+        center_y = height
 
         # 为了处理方便，将图像变换到以原点为中心
         center2zero = np.array([[1., 0., -center_x],
@@ -76,9 +77,9 @@ class AugmentSelection:
                          [0., 1., 0.],
                          [0., 0., 1.]])
 
-        # 最后再从原点中心变换到指定图像大小尺寸的中心上去
-        center2center = np.array([[1., 0., config.width // 2],
-                                  [0., 1., config.height // 2],
+        # 最后再从原点中心变换到指定图像大小尺寸的中心上去并且进行随机平移
+        center2center = np.array([[1., 0., config.width / 2 - 0.5 + self.crop[0]],
+                                  [0., 1., config.height / 2 - 0.5 + self.crop[1]],
                                   [0., 0., 1.]])
 
         # order of combination is reversed
