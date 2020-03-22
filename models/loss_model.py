@@ -53,6 +53,7 @@ class MultiTaskLoss(nn.Module):
         # gt_heatmaps = F.interpolate(target[1], size=pred.shape[-2:], mode='bilinear')  # type: torch.Tensor
         # gt_offsets = F.adaptive_avg_pool2d(target[2], output_size=pred.shape[-2:])
         gt_mask_misses = F.interpolate(target[0], size=pred.shape[-2:], mode='bilinear')  # type: torch.Tensor
+        gt_mask_misses[gt_mask_misses < 0.5] = 0
         # gt_mask_misses = F.adaptive_avg_pool2d(target[0], output_size=pred.shape[-2:])
 
         # gt_mask_offsets = F.interpolate(target[3], size=pred.shape[-2:], mode='bilinear')
