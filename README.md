@@ -64,6 +64,21 @@ The corresponding code is in pure python without multiprocess for now.
 
 `python evaluate.py` 
 
+Results on MSCOCO 2017 test-dev subset (focal L2 loss with gamma=2):
+
+```
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.685
+ Average Precision  (AP) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.867
+ Average Precision  (AP) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.749
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.664
+ Average Precision  (AP) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.719
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=   all | maxDets= 20 ] = 0.728
+ Average Recall     (AR) @[ IoU=0.50      | area=   all | maxDets= 20 ] = 0.892
+ Average Recall     (AR) @[ IoU=0.75      | area=   all | maxDets= 20 ] = 0.782
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area=medium | maxDets= 20 ] = 0.688
+ Average Recall     (AR) @[ IoU=0.50:0.95 | area= large | maxDets= 20 ] = 0.784
+```
+
 ## Training Steps
 
 Before training, prepare the training data using ''SimplePose/data/coco_masks_hdf5.py''.
