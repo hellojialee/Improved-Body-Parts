@@ -362,7 +362,7 @@ def test(epoch):
         logger.close()
 
 
-def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqent=5, lr_max=4e-5, lr_min=1e-5):
+def adjust_learning_rate_cyclic(optimizer, current_epoch, start_epoch, swa_freqent=5, lr_max=1e-5, lr_min=1e-6):
     epoch = current_epoch - start_epoch
 
     lr = lr_max - (lr_max - lr_min) / (swa_freqent - 1) * (epoch - epoch // swa_freqent * swa_freqent)
