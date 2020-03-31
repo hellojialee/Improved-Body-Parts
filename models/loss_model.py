@@ -131,7 +131,7 @@ class MultiTaskLoss(nn.Module):
         return loss
 
     @staticmethod
-    def focal_l2_loss(s, sxing, mask_miss, heat_start, bkg_start, gamma=2, multi_task_weight=0.1,
+    def focal_l2_loss(s, sxing, mask_miss, heat_start, bkg_start, gamma=1, multi_task_weight=0.1,
                       keypoint_task_weight=1, nstack_weight=[1, 1, 1, 1], alpha=0., beta=0.):
         """
         Compute the focal L2 loss between predicted and groundtruth score maps.
@@ -148,8 +148,8 @@ class MultiTaskLoss(nn.Module):
         mask[:, :, -2, :, :] *= multi_task_weight  # except for person mask channel
         mask[:, :, heat_start:bkg_start, :, :] *= keypoint_task_weight
 
-        st = torch.where(torch.ge(sxing, 0.01), s - alpha, 1 - s - beta)  # 0.01 # ap=0.68用的是0.008
-        factor = torch.abs(1. - st)  # (1. - st) ** gamma
+        st = torch.where(torch.ge(sxing, 0.01), s - alpha, 1 - s - beta)  
+        factor = torch.abs(1. - st)  # (1. - st) ** gamma  for gamma=2
         # multiplied by mask_miss via broadcast operation
         out = (s - sxing) ** 2 * factor * mask  # type: torch.Tensor
         # sum over the feature map, should divide by batch afterwards
@@ -157,7 +157,7 @@ class MultiTaskLoss(nn.Module):
         assert len(loss_nstack) == len(nstack_weight), nstack_weight
         print(' heatmap focal L2 loss per stack..........  ', loss_nstack.detach().cpu().numpy())
         weight_loss = [loss_nstack[i] * nstack_weight[i] for i in range(len(nstack_weight))]
-        loss = sum(weight_loss) / sum(nstack_weight)  # * 2  # *4 to expand the loss??
+        loss = sum(weight_loss) / sum(nstack_weight)  
         return loss
 
 
