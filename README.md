@@ -107,6 +107,10 @@ python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 - [Associative Embedding](https://github.com/princeton-vl/pose-ae-train)
 - [NVIDIA/apex](https://github.com/NVIDIA/apex)
 
+## Recommand Repositories
+
+[Faster Version](https://github.com/sokunmin/Improved-Body-Parts): Chun-Ming Su has rebuilt and improved the post-processing speed of this repo using C++, and the improved system can run up to 7~8 FPS using single scale with flipping on a 2080 TI GPU. Many thanks to Chun-Ming Su.
+
 ## Citation
 
 Please kindly cite this paper in your publications if it helps your research.
