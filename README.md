@@ -4,8 +4,8 @@ Code and pre-trained models for our paper, [“Simple Pose: Rethinking and Impro
 
 Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation Based on Gaussian Response Heatmaps" (under review). The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
-- [] update
-  1.  A faster project is to be released.
+- [ ] update
+  A faster project is to be released.
 
 
 
@@ -26,7 +26,7 @@ A bottom-up approach for the problem of multi-person pose estimation.
 ## Project Features
 
 - Implement the models using Pytorch in auto mixed-precision (using Nvidia Apex).
-- Supprot training on multiple GPUs (over 90% GPU usage rate on each GPU card).
+- Support training on multiple GPUs (over 90% GPU usage rate on each GPU card).
 - Fast data preparing and augmentation during training (generating about **40 samples per second** on signle CPU process and much more if warpped by DataLoader Class).
 - Focal L2 loss.
 - Multi-scale supervision.
@@ -44,7 +44,7 @@ A bottom-up approach for the problem of multi-person pose estimation.
 
    Download Link: [BaiduCloud](https://pan.baidu.com/s/1X7nGC-7CliP1iKgIfsBMUg)
 
-   Alternatively, download the pre-trained model without optimizer checkpoint only for the default configuration via: [GoogleDrive](https://drive.google.com/open?id=1gLa2oNxnbFPo0BjnpPaiAmWJwyND8wkA)
+   Alternatively, download the pre-trained model without optimizer checkpoint only for the default configuration via [GoogleDrive](https://drive.google.com/open?id=1gLa2oNxnbFPo0BjnpPaiAmWJwyND8wkA)
 
 4. Change the paths in the code according to your environment.
 
@@ -100,19 +100,19 @@ python -m torch.distributed.launch --nproc_per_node=4 train_distributed.py
 
 > Note:  The *loss_model_parrel.py* is for *train.py* and *train_parallel.py*, while the *loss_model.py* is for *train_distributed.py* and *train_distributed_SWA.py.* They are different in dividing the batch size. Please refer to the code about the different choices. 
 >
-> For distributed training, the real batch_size = batch_size_in_config* × GPU_Num (world_size actually). For others, the real batch_size = batch_size_in_config*. The differences come form the different mechanisms of data parallel training and distrubited training. 
+> For distributed training, the real batch_size = batch_size_in_config* × GPU_Num (world_size actually). For others, the real batch_size = batch_size_in_config*. The differences come from the different mechanisms of data parallel training and distributed training. 
 
 ## Referred Repositories (mainly)
 
-- [Realtime Multi-Person Pose Estimation verson 1](https://github.com/michalfaber/keras_Realtime_Multi-Person_Pose_Estimation)
-- [Realtime Multi-Person Pose Estimation verson 2](https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation)
+- [Realtime Multi-Person Pose Estimation version 1](https://github.com/michalfaber/keras_Realtime_Multi-Person_Pose_Estimation)
+- [Realtime Multi-Person Pose Estimation version 2](https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation)
 - [Realtime Multi-Person Pose Estimation version 3](https://github.com/ZheC/Realtime_Multi-Person_Pose_Estimation)
 - [Associative Embedding](https://github.com/princeton-vl/pose-ae-train)
 - [NVIDIA/apex](https://github.com/NVIDIA/apex)
 
 ## Recommend Repositories
 
-[Faster Version](https://github.com/sokunmin/Improved-Body-Parts): Chun-Ming Su has rebuilt and improved the post-processing speed of this repo using C++, and the improved system can run up to 7~8 FPS using single scale with flipping on a 2080 TI GPU. Many thanks to Chun-Ming Su.
+[Faster Version](https://github.com/sokunmin/Improved-Body-Parts): Chun-Ming Su has rebuilt and improved the post-processing speed of this repo using C++, and the improved system can run up to 7~8 FPS using a single scale with flipping on a 2080 TI GPU. Many thanks to Chun-Ming Su.
 
 ## Citation
 
