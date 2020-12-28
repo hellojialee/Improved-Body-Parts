@@ -4,7 +4,8 @@ Code and pre-trained models for our paper, [“Simple Pose: Rethinking and Impro
 
 Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation Based on Gaussian Response Heatmaps" (under review). The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
-- [ ] update
+- [ ] Update
+
   A faster project is to be released.
 
 
