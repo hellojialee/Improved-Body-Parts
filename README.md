@@ -30,6 +30,7 @@ A bottom-up approach for the problem of multi-person pose estimation.
 - Support training on multiple GPUs (over 90% GPU usage rate on each GPU card).
 - Fast data preparing and augmentation during training (generating about **40 samples per second** on signle CPU process and much more if wrapped by DataLoader Class).
 - Focal L2 loss.
+![FL2](visulizatoin/fl2.png)
 - Multi-scale supervision.
 - **This project can also serve as a detailed practice to the green hand in Pytorch.**
 
