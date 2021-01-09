@@ -56,7 +56,7 @@ class AugmentSelection:
         # https://github.com/anatolix/keras_Realtime_Multi-Person_Pose_Estimation/blob/master/py_rmpe_server/py_rmpe_transformer.py
         # This mean we will scale picture so height of person always will be 0.6 of picture.
         # After it we apply random scaling (self.scale) from 0.6 to 1.1
-         (width, height) = center
+        (width, height) = center
         center_x = width
         center_y = height
 
