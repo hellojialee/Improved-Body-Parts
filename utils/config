@@ -8,11 +8,12 @@ GPUdeviceNumber = 0
 # Select model (default: 1)
 modelID = 1
 
+# Look in matlab counterpart for explanation thre 1,2,3 are threshold
 starting_range = 0.8
 ending_range = 2
-scale_search =    0.5, 1, 1.5, 2, 3  #  1
+scale_search = 1 #  0.5, 1, 1.5, 2, 2.5
 rotation_search = 0
-topk = 32 # recall the top K responses in the heatmaps
+topk = 32 #recall the top K responses in the heatmaps
 thre1 = 0.1  # keypoint threshold
 thre2 = 0.1 # limb threshold
 
@@ -33,7 +34,7 @@ remove_recon = 0  # 0 or 1, remove the re-connected body parts or not
 caffemodel = './model/_trained_COCO/pose_iter_440000.caffemodel'
 deployFile = './model/_trained_COCO/pose_deploy.prototxt'
 description = 'COCO Pose56 Two-level Linevec'
-boxsize = 512
+boxsize = 640
 padValue = 128
 np = 12
 stride = 4
