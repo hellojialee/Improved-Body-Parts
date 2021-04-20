@@ -70,7 +70,7 @@ prometheus-client==0.6.0
 prompt-toolkit==2.0.9
 protobuf==3.6.1
 ptyprocess==0.6.0
-py==1.8.0
+py==1.10.0
 pycocotools==2.0.0
 Pygments==2.4.0
 pylint==2.3.1
