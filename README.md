@@ -6,7 +6,9 @@ Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimati
 
 - [x] Update
 
-  A faster project is released at [OffsetGuided](https://github.com/hellojialee/OffsetGuided).
+  A faster project is released at [OffsetGuided](https://github.com/hellojialee/OffsetGuided)
+  
+  A Chinese note at [Zhihu](https://zhuanlan.zhihu.com/p/109118177)
 
 
 
