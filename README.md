@@ -2,11 +2,11 @@
 
 Code and pre-trained models for our paper, [“Simple Pose: Rethinking and Improving a Bottom-up Approach for Multi-Person Pose Estimation”](https://arxiv.org/abs/1911.10529), accepted by AAAI-2020. 
 
-Also this repo serves as the **Part B** of our paper "Multi-Person Pose Estimation Based on Gaussian Response Heatmaps" (under review). The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
+Also this repo serves as the **Part B** of our paper. The **Part A** is available at [this link](https://github.com/jialee93/Multi-Person-Pose-using-Body-Parts).
 
 - [x] Update
 
-  A faster project is released at [OffsetGuided](https://github.com/hellojialee/OffsetGuided), i.e., SimplePose-V2.
+  A faster project, i.e., the **Part C**  is released at [OffsetGuided](https://github.com/hellojialee/OffsetGuided), i.e., SimplePose-V2.
   
   A Chinese note at [Zhihu](https://zhuanlan.zhihu.com/p/109118177)
 
