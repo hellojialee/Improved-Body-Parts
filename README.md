@@ -6,7 +6,7 @@ Also this repo serves as the **Part B** of our paper. The **Part A** is availabl
 
 - [x] Update
 
-  A faster project, i.e., the **Part C**  is released at [this link](https://github.com/hellojialee/OffsetGuided).
+  An improved project is released at [this link](https://github.com/hellojialee/OffsetGuided).
   
   A Chinese note at [Zhihu](https://zhuanlan.zhihu.com/p/109118177)
 
