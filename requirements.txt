@@ -96,7 +96,7 @@ tb-nightly==1.14.0a20190301
 tensorboard==1.13.1
 tensorboardX==1.5
 tensorflow-estimator==1.13.0
-tensorflow-gpu==2.0.0a0
+tensorflow-gpu==2.5.3
 termcolor==1.1.0
 terminado==0.8.2
 testpath==0.4.2
